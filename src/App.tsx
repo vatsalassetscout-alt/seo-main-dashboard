@@ -574,6 +574,43 @@ export default function App() {
     }
   };
 
+  const fetchPropertyKeywords = async (siteUrl: string, start: string, end: string, token: string): Promise<KeywordEntry[]> => {
+    const cacheKey = `property_keywords_${siteUrl}_${start}_${end}`;
+    const cached = await cache.get<KeywordEntry[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const r = await fetch(`${GSC_BASE}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startDate: start,
+          endDate: end,
+          type: 'web',
+          aggregationType: 'byProperty',
+          dataState: 'all',
+          dimensions: ['query'],
+          rowLimit: 250
+        })
+      });
+
+      if (r.status !== 200) return [];
+      const d = await r.json();
+      const keywords: KeywordEntry[] = (d.rows || []).map((row: any) => ({
+        keyword: row.keys[0],
+        clicks: Math.round(row.clicks),
+        impressions: Math.round(row.impressions),
+        ctr: row.ctr * 100,
+        position: row.position
+      }));
+
+      await cache.set(cacheKey, keywords, 21600);
+      return keywords;
+    } catch {
+      return [];
+    }
+  };
+
   const fetchTimeSeriesFull = async (sites: SiteData[], start: string, end: string, token: string): Promise<TimeSeriesEntry[]> => {
     const cacheKey = `timeseries_full_${start}_${end}_${sites.length}`;
     const cached = await cache.get<TimeSeriesEntry[]>(cacheKey);
@@ -665,7 +702,6 @@ export default function App() {
     }
 
     if (!hasValidSession()) {
-      await loadMockAnalytics(isForce);
       return;
     }
 
@@ -691,6 +727,9 @@ export default function App() {
         list.map(s => s.siteUrl),
         async (siteUrl) => {
           const res = await fetchPropertyTotals(siteUrl, start, end, token);
+          if (res) {
+            res.keywords = await fetchPropertyKeywords(siteUrl, start, end, token);
+          }
           completedCount++;
           const percent = Math.round((completedCount / list.length) * 100);
           setLoadingPercent(percent);
@@ -792,7 +831,9 @@ export default function App() {
     if (!allData || allData.length === 0) return [];
     
     allData.forEach(site => {
-      const keywords = generateMockKeywords(site);
+      const keywords = site.keywords && site.keywords.length > 0 
+        ? site.keywords 
+        : generateMockKeywords(site);
       keywords.forEach(kw => {
         const text = kw.keyword;
         if (!text) return;
@@ -1826,13 +1867,20 @@ export default function App() {
           )}
 
           {/* Action Column */}
-          <div className="w-full">
+          <div className="w-full space-y-3">
             <button
               onClick={triggerGSCConnect}
               className="w-full py-3.5 px-5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-extrabold rounded-2xl text-xs tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/15"
             >
               <Globe className="w-4 h-4" />
               <span>CONNECT SEARCH CONSOLE</span>
+            </button>
+
+            <button
+              onClick={() => loadMockAnalytics(true)}
+              className="w-full py-3 px-5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/45 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-350 font-bold rounded-2xl text-[11px] tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>EXPLORE WITH DEMO SANDBOX</span>
             </button>
           </div>
 
