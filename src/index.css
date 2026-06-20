@@ -1,0 +1,137 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    background-color: #f8fafc;
+    color: #1e293b;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html.dark body {
+    background-color: #090f1c;
+    color: #f1f5f9;
+  }
+
+  /* Custom high-end professional scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+}
+
+/* Perfect and Clean PDF Export print stylesheet with gorgeous layout alignment */
+@media print {
+  /* Hide sidebars, buttons, form controls, calendars, custom modals, tabs, and export elements */
+  aside,
+  header select,
+  header button,
+  .no-print,
+  button,
+  form,
+  input,
+  select,
+  .theme-toggle,
+  .toasts-container,
+  dialog,
+  .modal-overlay,
+  .fixed,
+  .no-print-element,
+  .calendar-picker-trigger,
+  [role="tablist"],
+  .tab-buttons-container,
+  .refresh-btn {
+    display: none !important;
+  }
+  
+  /* Retain grid and flex alignments cleanly for print output */
+  .grid {
+    display: grid !important;
+    gap: 1rem !important;
+  }
+  
+  .flex {
+    display: flex !important;
+  }
+
+  .flex-col {
+    flex-direction: column !important;
+  }
+
+  .flex-row {
+    flex-direction: row !important;
+  }
+
+  /* Force background colors and typography themes to render cleanly on white paper */
+  body, html, #root, [data-theme] {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    background-color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Make containers fit nicely inside standard page dimensions */
+  #root, main, .flex-1, .space-y-6 {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Render cards beautifully with clean, delicate light borders instead of high-shadow styles */
+  .card, .chart-card, .bg-white, .border, .rounded-2xl {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #0d1421 !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: visible !important;
+  }
+
+  /* Prevent row breakdown across multiple pages */
+  tr, tbody tr, .table-row {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Clean headings */
+  h1, h2, h3, h4 {
+    color: #0f172a !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  span, p, td, th {
+    color: #1e293b !important;
+  }
+
+  /* Optimize charts to fit beautifully */
+  canvas, svg {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}
+
