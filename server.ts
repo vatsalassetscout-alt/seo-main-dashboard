@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import axios from "axios";
 import { google } from "googleapis";
-import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -47,8 +46,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// Use a dedicated API Router
+const apiRouter = express.Router();
+
 // 1. Check current backend sheet configurability endpoints
-app.get("/api/config-status", (req, res) => {
+apiRouter.get("/config-status", (req, res) => {
   const clientEmail = cleanEnvVar(process.env.GOOGLE_CLIENT_EMAIL);
   const privateKey = cleanEnvVar(process.env.GOOGLE_PRIVATE_KEY);
   const spreadsheetId = cleanSpreadsheetId(process.env.GOOGLE_SHEET_ID);
@@ -73,7 +75,7 @@ app.get("/api/config-status", (req, res) => {
 });
 
 // 2. `/api/check-rank`
-app.post("/api/check-rank", async (req, res) => {
+apiRouter.post("/check-rank", async (req, res) => {
   const { apiKey, keyword, country = "in", domain } = req.body || {};
 
   if (!apiKey || !keyword || !domain) {
@@ -178,7 +180,7 @@ app.post("/api/check-rank", async (req, res) => {
 });
 
 // 3. `/api/get-trackers`
-app.get("/api/get-trackers", async (req, res) => {
+apiRouter.get("/get-trackers", async (req, res) => {
   try {
     const clientEmail = cleanEnvVar(process.env.GOOGLE_CLIENT_EMAIL);
     const privateKey = cleanEnvVar(process.env.GOOGLE_PRIVATE_KEY);
@@ -225,7 +227,7 @@ app.get("/api/get-trackers", async (req, res) => {
 });
 
 // 4. `/api/save-trackers`
-app.post("/api/save-trackers", async (req, res) => {
+apiRouter.post("/save-trackers", async (req, res) => {
   try {
     console.log("SAVE API HIT");
     const trackers = req.body;
@@ -282,12 +284,17 @@ app.post("/api/save-trackers", async (req, res) => {
   }
 });
 
+// Mount the API Router for total prefix resilience
+app.use("/api", apiRouter);
+app.use("/", apiRouter);
+
 // Bootstrap standalone Express & Vite dev server (Bypassed in serverless environments like Vercel)
 async function bootstrapServer() {
   const PORT = 3000;
 
   // Vite Integration & Static File Server Setup
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa"
