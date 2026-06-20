@@ -3,6 +3,32 @@ import path from "path";
 import axios from "axios";
 import { google } from "googleapis";
 import { createServer as createViteServer } from "vite";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+function cleanEnvVar(val: string | undefined): string {
+  if (!val) return "";
+  let s = val.trim();
+  // Remove wrapping quotes if present
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.substring(1, s.length - 1).trim();
+  }
+  // Replace escaped \n with actual newlines
+  s = s.replace(/\\n/g, "\n");
+  return s;
+}
+
+function cleanSpreadsheetId(val: string | undefined): string {
+  let s = cleanEnvVar(val);
+  if (s.includes("docs.google.com/spreadsheets")) {
+    const match = s.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  return s;
+}
 
 const app = express();
 
@@ -23,13 +49,13 @@ app.use((req, res, next) => {
 
 // 1. Check current backend sheet configurability endpoints
 app.get("/api/config-status", (req, res) => {
-  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
-  const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+  const clientEmail = cleanEnvVar(process.env.GOOGLE_CLIENT_EMAIL);
+  const privateKey = cleanEnvVar(process.env.GOOGLE_PRIVATE_KEY);
+  const spreadsheetId = cleanSpreadsheetId(process.env.GOOGLE_SHEET_ID);
   
-  const leadsClientEmail = process.env.GOOGLE_LEADS_CLIENT_EMAIL || clientEmail;
-  const leadsPrivateKey = process.env.GOOGLE_LEADS_PRIVATE_KEY || privateKey;
-  const leadsSpreadsheetId = process.env.GOOGLE_LEADS_SHEET_ID;
+  const leadsClientEmail = cleanEnvVar(process.env.GOOGLE_LEADS_CLIENT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL);
+  const leadsPrivateKey = cleanEnvVar(process.env.GOOGLE_LEADS_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY);
+  const leadsSpreadsheetId = cleanSpreadsheetId(process.env.GOOGLE_LEADS_SHEET_ID);
 
   res.json({
     configured: !!(clientEmail && privateKey && spreadsheetId),
@@ -154,9 +180,9 @@ app.post("/api/check-rank", async (req, res) => {
 // 3. `/api/get-trackers`
 app.get("/api/get-trackers", async (req, res) => {
   try {
-    const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-    const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n").trim();
-    const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+    const clientEmail = cleanEnvVar(process.env.GOOGLE_CLIENT_EMAIL);
+    const privateKey = cleanEnvVar(process.env.GOOGLE_PRIVATE_KEY);
+    const spreadsheetId = cleanSpreadsheetId(process.env.GOOGLE_SHEET_ID);
 
     console.log("EMAIL:", clientEmail);
     console.log("SHEET ID:", spreadsheetId);
@@ -207,9 +233,9 @@ app.post("/api/save-trackers", async (req, res) => {
       return res.status(400).json({ error: "Body must be an array of trackers" });
     }
 
-    const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-    const privateKey = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
-    const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+    const clientEmail = cleanEnvVar(process.env.GOOGLE_CLIENT_EMAIL);
+    const privateKey = cleanEnvVar(process.env.GOOGLE_PRIVATE_KEY);
+    const spreadsheetId = cleanSpreadsheetId(process.env.GOOGLE_SHEET_ID);
 
     if (!clientEmail)   return res.status(500).json({ error: "GOOGLE_CLIENT_EMAIL env var not set" });
     if (!privateKey)    return res.status(500).json({ error: "GOOGLE_PRIVATE_KEY env var not set" });
