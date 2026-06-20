@@ -12,6 +12,7 @@ export interface SiteData {
   impressions: number;
   ctr: number; // Percentage (e.g. 5.23)
   position: number;
+  keywords?: KeywordEntry[];
 }
 
 export interface TimeSeriesEntry {
