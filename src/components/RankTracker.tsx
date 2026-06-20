@@ -428,29 +428,73 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
         ))}
       </div>
 
-      {/* TOP HEADER & SIMPLE API CONFIGURATION BANNER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 p-5 rounded-2xl shadow-xs transition-colors">
-        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-mono">
-          SERP API Key Configuration
-        </span>
-
-        <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
-          <div className="relative w-full sm:w-[240px]">
-            <Key className="absolute left-3 top-3 w-3.5 h-3.5 text-slate-400" />
-            <input
-              type="password"
-              placeholder="Paste SerpAPI Key..."
-              value={apiKeyInput}
-              onChange={(e) => setApiKeyInput(e.target.value)}
-              className="p-2 pl-9 pr-3 w-full text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 text-slate-800 dark:text-slate-200 outline-none font-medium focus:border-indigo-500/50 h-[38px] transition-all"
-            />
+      {/* TOP HEADER & DUAL CONFIGURATION STATUS WIDGETS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* SERP API key configuration */}
+        <div className="bg-white dark:bg-[#111827] border border-slate-205 dark:border-slate-800/80 p-5 rounded-2xl shadow-xs transition-colors flex flex-col justify-between gap-3.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-mono">
+              <Key className="w-3.5 h-3.5 text-indigo-500" />
+              SERP API Key Configuration
+            </span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${apiKey ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/10 text-amber-600'}`}>
+              {apiKey ? 'Active Key' : 'Key Missing'}
+            </span>
           </div>
-          <button
-            onClick={handleSaveApiKey}
-            className="p-2 px-5 rounded-xl font-extrabold text-xs bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer active:scale-95 transition-all h-[38px] shadow-md shadow-indigo-600/10 text-shadow-sm"
-          >
-            Save Button
-          </button>
+
+          <div className="flex items-center gap-2.5 w-full">
+            <div className="relative flex-1">
+              <Key className="absolute left-3 top-3 w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="password"
+                placeholder={apiKey ? "••••••••••••••••••••" : "Paste SerpAPI Key..."}
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                className="p-2 pl-9 pr-3 w-full text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 text-slate-800 dark:text-slate-200 outline-none font-medium focus:border-indigo-500/50 h-[38px] transition-all"
+              />
+            </div>
+            <button
+              onClick={handleSaveApiKey}
+              className="p-2 px-5 rounded-xl font-extrabold text-xs bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer active:scale-95 transition-all h-[38px] shadow-md shadow-indigo-600/10 text-shadow-sm shrink-0"
+            >
+              Save Key
+            </button>
+          </div>
+        </div>
+
+        {/* Database (Google Sheets) Connection status */}
+        <div className="bg-white dark:bg-[#111827] border border-slate-205 dark:border-slate-800/80 p-5 rounded-2xl shadow-xs transition-colors flex flex-col justify-between gap-3.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-mono font-bold">
+              <Globe className="w-3.5 h-3.5 text-emerald-500" />
+              Google Sheets Database Status
+            </span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${dbStatus === 'sheets' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/10 text-amber-600'}`}>
+              {dbStatus === 'sheets' ? 'Database Connected' : 'Disconnected'}
+            </span>
+          </div>
+
+          {dbStatus === 'sheets' ? (
+            <div className="text-xs text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Active Connection: <strong className="font-mono text-indigo-600 dark:text-indigo-400 text-[11px]">Sheet1 (A2:F)</strong></span>
+              </div>
+              <p className="text-slate-400 dark:text-slate-500 text-[11px] leading-snug">
+                Keywords and rankings are automatically synchronized in real-time with your Google Spreadsheet database.
+              </p>
+            </div>
+          ) : (
+            <div className="text-xs text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
+              <div className="flex items-start gap-1.5 mb-1 text-amber-600 font-bold leading-tight">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>Running in Local Backup Mode (Offline Database)</span>
+              </div>
+              <p className="text-slate-400 dark:text-slate-500 text-[10.5px] leading-tight">
+                To sync, add target variables <strong className="font-mono">GOOGLE_CLIENT_EMAIL</strong>, <strong className="font-mono">GOOGLE_PRIVATE_KEY</strong>, & <strong className="font-mono">GOOGLE_SHEET_ID</strong> to parameters.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
