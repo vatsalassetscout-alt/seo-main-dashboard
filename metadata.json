@@ -1,8 +1,0 @@
-{
-  "name": "Asset Scout - SEO Dashboard",
-  "description": "A highly-polished Google Search Console SEO Dashboard to track performance metrics, click-through rates, average positions, and keyword mappings across all your properties.",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
