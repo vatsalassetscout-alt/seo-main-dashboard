@@ -1989,7 +1989,7 @@ export default function App() {
             
             {/* Control Filtering & Calendar row */}
             <div className="bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 p-5 rounded-2xl shadow-xs flex flex-wrap items-end gap-4 justify-between transition-colors">
-              <div className="flex flex-wrap md:flex-nowrap items-end gap-4 flex-1 w-full md:w-auto">
+              <div className="flex flex-wrap items-end gap-4 flex-1 w-full md:w-auto">
                 {/* Custom calendar selection component */}
                 <CalendarPicker
                   preset={preset}
@@ -2031,8 +2031,8 @@ export default function App() {
                   </select>
                 </div>
 
-                {/* Search Text Input */}
-                <div className="flex flex-col gap-1.5 flex-grow min-w-[250px] w-full">
+                {/* Search Text Input (decreased/compact size) */}
+                <div className="flex flex-col gap-1.5 min-w-[150px] md:max-w-[200px] flex-1">
                   <label className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold uppercase tracking-wider">
                     Search Properties
                   </label>
