@@ -78,6 +78,11 @@ export function LeadsDashboard({ theme }: { theme: 'light' | 'dark' }) {
   const locationChartInstance = useRef<Chart | null>(null);
   const sourcesChartInstance = useRef<Chart | null>(null);
 
+  // References to filter dropdown outer containers to prevent premature closing when selecting options
+  const projectRef = useRef<HTMLDivElement | null>(null);
+  const locationRef = useRef<HTMLDivElement | null>(null);
+  const sourceRef = useRef<HTMLDivElement | null>(null);
+
   const fetchSheetData = async () => {
     setIsLoading(true);
     setErrorMsg(null);
@@ -630,13 +635,21 @@ export function LeadsDashboard({ theme }: { theme: 'light' | 'dark' }) {
 
   // Close dropdowns when clicking outside
   useEffect(() => {
-    const handleOutsideClick = () => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        (projectRef.current && projectRef.current.contains(target)) ||
+        (locationRef.current && locationRef.current.contains(target)) ||
+        (sourceRef.current && sourceRef.current.contains(target))
+      ) {
+        return; // Clicked inside one of the dropdown areas, so retain open states
+      }
       setShowLocationDropdown(false);
       setShowSourceDropdown(false);
       setShowProjectDropdown(false);
     };
-    window.addEventListener('click', handleOutsideClick);
-    return () => window.removeEventListener('click', handleOutsideClick);
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
   // Modal grouping details
@@ -715,7 +728,7 @@ export function LeadsDashboard({ theme }: { theme: 'light' | 'dark' }) {
           </div>
 
           {/* Project Choice */}
-          <div className="flex flex-col gap-1 min-w-[110px] md:min-w-[125px] flex-1 relative">
+          <div ref={projectRef} className="flex flex-col gap-1 min-w-[110px] md:min-w-[125px] flex-1 relative">
             <span className="text-[10px] font-bold text-slate-450 dark:text-slate-500 tracking-wider uppercase truncate">Project filter</span>
             <button
               type="button"
@@ -766,7 +779,7 @@ export function LeadsDashboard({ theme }: { theme: 'light' | 'dark' }) {
           </div>
 
           {/* Location Choice */}
-          <div className="flex flex-col gap-1 min-w-[110px] md:min-w-[125px] flex-1 relative">
+          <div ref={locationRef} className="flex flex-col gap-1 min-w-[110px] md:min-w-[125px] flex-1 relative">
             <span className="text-[10px] font-bold text-slate-450 dark:text-slate-500 tracking-wider uppercase truncate">Location filter</span>
             <button
               type="button"
@@ -817,7 +830,7 @@ export function LeadsDashboard({ theme }: { theme: 'light' | 'dark' }) {
           </div>
 
           {/* Source Choice */}
-          <div className="flex flex-col gap-1 min-w-[110px] md:min-w-[125px] flex-1 relative">
+          <div ref={sourceRef} className="flex flex-col gap-1 min-w-[110px] md:min-w-[125px] flex-1 relative">
             <span className="text-[10px] font-bold text-slate-450 dark:text-slate-500 tracking-wider uppercase truncate">Source filter</span>
             <button
               type="button"
