@@ -228,15 +228,15 @@ export function CalendarPicker({
   const isCustomOrSingle = preset === 'custom' || preset === '1';
 
   return (
-    <div className="flex gap-4 flex-wrap items-end">
+    <>
       {/* Preset Dropdown */}
-      <div className="flex flex-col gap-1.5 min-w-[135px]">
-        <label className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold uppercase tracking-wider">
+      <div className="flex flex-col gap-1.5 min-w-[130px]">
+        <label className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider">
           Preset
         </label>
         <select
           id="preset"
-          className="p-2.5 px-3 border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#060a12] text-slate-800 dark:text-slate-200 rounded-lg text-xs leading-tight font-sans transition-all focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 shadow-sm w-full"
+          className="p-2.5 px-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1f2937] text-slate-800 dark:text-slate-100 rounded-lg text-xs leading-tight font-sans transition-all focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 shadow-xs cursor-pointer w-full"
           value={preset}
           onChange={(e) => {
             const val = e.target.value as PresetType;
@@ -254,20 +254,18 @@ export function CalendarPicker({
 
       {/* Date Pickers for Custom and Single day */}
       {isCustomOrSingle && (
-        <div className="flex items-center gap-2 flex-wrap bg-slate-50 dark:bg-slate-900/30 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800/35">
+        <>
           {/* From Picker */}
-          <div className="relative" ref={fromRef}>
-            <div className="flex flex-col gap-1 px-1">
-              <label className="text-[9px] text-[#4a5f7a] dark:text-[#94a3b8] font-bold uppercase tracking-wider">
-                {preset === '1' ? 'Target Date' : 'From'}
-              </label>
-              <div
-                className={`flex items-center gap-2 p-1.5 px-3 border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#060a12] text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono cursor-pointer transition-all hover:border-blue-500 shadow-sm ${openDropdown === 'from' ? 'border-blue-500 ring-1 ring-blue-500/10' : ''}`}
-                onClick={() => setOpenDropdown(openDropdown === 'from' ? null : 'from')}
-              >
-                <span>📅</span>
-                <span>{calState.from || 'Select date'}</span>
-              </div>
+          <div className="relative flex flex-col gap-1.5 min-w-[125px]" ref={fromRef}>
+            <label className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider">
+              {preset === '1' ? 'Target Date' : 'From'}
+            </label>
+            <div
+              className={`flex items-center gap-2 p-2.5 px-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1f2937] text-slate-800 dark:text-slate-100 rounded-lg text-xs font-mono cursor-pointer transition-all hover:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 shadow-xs ${openDropdown === 'from' ? 'border-blue-500 ring-1 ring-blue-500/10' : ''}`}
+              onClick={() => setOpenDropdown(openDropdown === 'from' ? null : 'from')}
+            >
+              <span>📅</span>
+              <span className="truncate">{calState.from || 'Select date'}</span>
             </div>
             {openDropdown === 'from' && (
               <div className="absolute top-full left-0 z-50">
@@ -278,44 +276,44 @@ export function CalendarPicker({
 
           {/* Spacer if Custom range */}
           {preset === 'custom' && (
-            <>
-              <span className="text-slate-400 dark:text-slate-500 font-semibold self-center pt-4 select-none">→</span>
+            <div className="flex items-center justify-center self-end pb-3 select-none text-slate-400 dark:text-slate-500 font-bold px-0.5">
+              →
+            </div>
+          )}
 
-              {/* To Picker */}
-              <div className="relative" ref={toRef}>
-                <div className="flex flex-col gap-1 px-1">
-                  <label className="text-[9px] text-[#4a5f7a] dark:text-[#94a3b8] font-bold uppercase tracking-wider">
-                    To
-                  </label>
-                  <div
-                    className={`flex items-center gap-2 p-1.5 px-3 border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#060a12] text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono cursor-pointer transition-all hover:border-blue-500 shadow-sm ${openDropdown === 'to' ? 'border-blue-500 ring-1 ring-blue-500/10' : ''}`}
-                    onClick={() => setOpenDropdown(openDropdown === 'to' ? null : 'to')}
-                  >
-                    <span>📅</span>
-                    <span>{calState.to || 'Select date'}</span>
-                  </div>
-                </div>
-                {openDropdown === 'to' && (
-                  <div className="absolute top-full left-0 z-50">
-                    {renderCalendarGrid('to')}
-                  </div>
-                )}
+          {/* To Picker */}
+          {preset === 'custom' && (
+            <div className="relative flex flex-col gap-1.5 min-w-[125px]" ref={toRef}>
+              <label className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider">
+                To
+              </label>
+              <div
+                className={`flex items-center gap-2 p-2.5 px-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1f2937] text-slate-800 dark:text-slate-100 rounded-lg text-xs font-mono cursor-pointer transition-all hover:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 shadow-xs ${openDropdown === 'to' ? 'border-blue-500 ring-1 ring-blue-500/10' : ''}`}
+                onClick={() => setOpenDropdown(openDropdown === 'to' ? null : 'to')}
+              >
+                <span>📅</span>
+                <span className="truncate">{calState.to || 'Select date'}</span>
               </div>
-            </>
+              {openDropdown === 'to' && (
+                <div className="absolute top-full left-0 z-50">
+                  {renderCalendarGrid('to')}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Actions to apply */}
-          <div className="flex flex-col gap-1 px-1 h-full self-end p-0.5">
+          <div className="flex flex-col gap-1.5 self-end">
             <button
               type="button"
-              className="p-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-xs transition-all hover:scale-[1.02] active:scale-95 shadow-md flex items-center gap-1 cursor-pointer"
+              className="p-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-semibold rounded-lg text-xs transition-all flex items-center justify-center cursor-pointer h-[38px] shadow-sm"
               onClick={onApply}
             >
-              Apply Range
+              Apply
             </button>
           </div>
-        </div>
+        </>
       )}
-    </div>
+    </>
   );
 }
