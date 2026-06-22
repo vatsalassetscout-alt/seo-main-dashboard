@@ -150,14 +150,21 @@ async function startServer() {
   app.get("/api/get-trackers", async (req, res) => {
     try {
       const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-      const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n").trim();
+      const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
       const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
-      if (!clientEmail || !privateKey || !spreadsheetId) {
+      if (!clientEmail || !rawPrivateKey || !spreadsheetId) {
         return res.status(400).json({
           error: "Google credentials are not configured in environment backend variables."
         });
       }
+
+      // Handle quote wrapping and escaped newlines correctly 
+      let privateKey = rawPrivateKey.replace(/\\n/g, "\n");
+      if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+        privateKey = privateKey.slice(1, -1);
+      }
+      privateKey = privateKey.trim();
 
       const auth = new google.auth.GoogleAuth({
         credentials: { client_email: clientEmail, private_key: privateKey },
@@ -166,9 +173,13 @@ async function startServer() {
 
       const sheets = google.sheets({ version: "v4", auth });
 
+      // Fetch spreadsheet tab sheets dynamically (avoid hardcoding Sheet1)
+      const meta = await sheets.spreadsheets.get({ spreadsheetId });
+      const sheetName = meta.data.sheets?.[0]?.properties?.title || "Sheet1";
+
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: "Sheet1!A2:F"
+        range: `${sheetName}!A2:F`
       });
 
       const rows = response.data.values || [];
@@ -199,14 +210,21 @@ async function startServer() {
       }
 
       const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-      const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n").trim();
+      const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
       const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
-      if (!clientEmail || !privateKey || !spreadsheetId) {
+      if (!clientEmail || !rawPrivateKey || !spreadsheetId) {
         return res.status(400).json({
           error: "Google credentials are not configured in environment backend variables."
         });
       }
+
+      // Handle quote wrapping and escaped newlines correctly
+      let privateKey = rawPrivateKey.replace(/\\n/g, "\n");
+      if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+        privateKey = privateKey.slice(1, -1);
+      }
+      privateKey = privateKey.trim();
 
       const auth = new google.auth.GoogleAuth({
         credentials: { client_email: clientEmail, private_key: privateKey },
@@ -215,10 +233,14 @@ async function startServer() {
 
       const sheets = google.sheets({ version: "v4", auth });
 
+      // Fetch spreadsheet tab sheets dynamically (avoid hardcoding Sheet1)
+      const meta = await sheets.spreadsheets.get({ spreadsheetId });
+      const sheetName = meta.data.sheets?.[0]?.properties?.title || "Sheet1";
+
       // Clear existing values (keep headers row 1)
       await sheets.spreadsheets.values.clear({
         spreadsheetId,
-        range: "Sheet1!A2:F"
+        range: `${sheetName}!A2:F`
       });
 
       if (trackers.length > 0) {
@@ -233,7 +255,7 @@ async function startServer() {
 
         await sheets.spreadsheets.values.update({
           spreadsheetId,
-          range: "Sheet1!A2",
+          range: `${sheetName}!A2`,
           valueInputOption: "RAW",
           requestBody: { values }
         });
