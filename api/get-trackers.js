@@ -8,13 +8,20 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') { return res.status(405).json({ error: 'Method not allowed' }); }
 
   try {
-    const clientEmail  = process.env.GOOGLE_CLIENT_EMAIL;
-    const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n').trim();    
+    let clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+    let rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
     const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
     if (!clientEmail)   return res.status(500).json({ error: 'GOOGLE_CLIENT_EMAIL env var not set' });
-    if (!privateKey)    return res.status(500).json({ error: 'GOOGLE_PRIVATE_KEY env var not set' });
+    if (!rawPrivateKey)  return res.status(500).json({ error: 'GOOGLE_PRIVATE_KEY env var not set' });
     if (!spreadsheetId) return res.status(500).json({ error: 'GOOGLE_SHEET_ID env var not set' });
+
+    // Handle quote wrapping and escaped newlines correctly in Vercel
+    let privateKey = rawPrivateKey.replace(/\\n/g, '\n');
+    if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+      privateKey = privateKey.slice(1, -1);
+    }
+    privateKey = privateKey.trim();
 
     const auth = new google.auth.GoogleAuth({
       credentials: { client_email: clientEmail, private_key: privateKey },
@@ -23,9 +30,14 @@ module.exports = async (req, res) => {
 
     const sheets = google.sheets({ version: 'v4', auth });
 
+    // 1. Fetch spreadsheet sheet tabs to avoid 500 error if Sheet1 is named differently or missing
+    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    const sheetName = meta.data.sheets?.[0]?.properties?.title || 'Sheet1';
+
+    // 2. Fetch the data table from the first sheet tab
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Sheet1!A2:F',
+      range: `${sheetName}!A2:F`,
     });
 
     const rows = response.data.values || [];
