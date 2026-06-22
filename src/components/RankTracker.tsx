@@ -71,8 +71,6 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
   // Load state and feedback alerts
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<{ id: string; msg: string; type: 'success' | 'error' | 'info' }[]>([]);
-  const [dbStatus, setDbStatus] = useState<'pending' | 'sheets' | 'local'>('pending');
-  const [dbError, setDbError] = useState<string | null>(null);
 
   // Show a nicely floating toast message
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -107,38 +105,30 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
         if (Array.isArray(remoteData)) {
           setTrackers(remoteData);
           successfullyLoaded = true;
-          setDbStatus('sheets');
-          setDbError(null);
-        } else {
-          setDbError('Invalid data schema inside Google Sheet. Expecting A:F columns array.');
         }
-      } else {
-        const data = await response.json().catch(() => ({}));
-        setDbError(data.error || `HTTP ${response.status} Connection Error.`);
       }
     } catch (err: any) {
       console.log('Skipping remote fetch, falling back to local database.');
-      setDbError(err.message || 'Network exception connecting to backend Sheets API.');
     }
 
     if (!successfullyLoaded) {
-      setDbStatus('local');
       const localString = localStorage.getItem('rp_trackers');
       if (localString) {
         try {
-          const loaded: Tracker[] = JSON.parse(localString);
-          // Purge dummy samples if present
-          const curated = loaded.filter(t => t.domain !== 'apple.com' && t.domain !== 'microsoft.com');
-          if (curated.length !== loaded.length) {
-            localStorage.setItem('rp_trackers', JSON.stringify(curated));
-          }
-          setTrackers(curated);
+          setTrackers(JSON.parse(localString));
         } catch {
           setTrackers([]);
         }
       } else {
-        setTrackers([]);
-        localStorage.setItem('rp_trackers', JSON.stringify([]));
+        // Hydrate with some interactive sample keyword rank trackers to let users test instantly
+        const sampleTrackers: Tracker[] = [
+          { id: '1', domain: 'apple.com', keyword: 'iphone buy online', country: 'us', pos: 1, checked: new Date(Date.now() - 3600000 * 2).toISOString() },
+          { id: '2', domain: 'apple.com', keyword: 'tablet specs', country: 'us', pos: 3, checked: new Date(Date.now() - 3600000 * 2).toISOString() },
+          { id: '3', domain: 'assetscout.in', keyword: 'real estate pune', country: 'in', pos: 8, checked: new Date(Date.now() - 3600000 * 4).toISOString() },
+          { id: '4', domain: 'microsoft.com', keyword: 'cloud software enterprise', country: 'us', pos: 14, checked: new Date(Date.now() - 3600000 * 12).toISOString() }
+        ];
+        setTrackers(sampleTrackers);
+        localStorage.setItem('rp_trackers', JSON.stringify(sampleTrackers));
       }
     }
 
@@ -371,8 +361,8 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
     let currentTempList = [...trackers];
     for (const t of kws) {
       currentTempList = await runSERPCheck(t.id, currentTempList);
-      // Fast instant update
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Wait slight buffer delay to prevent SerpApi concurrency burst triggers
+      await new Promise((resolve) => setTimeout(resolve, 800));
     }
   };
 
@@ -396,7 +386,7 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
     let currentTempList = [...trackers];
     for (let i = 0; i < trackers.length; i++) {
       currentTempList = await runSERPCheck(trackers[i].id, currentTempList);
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     setIsRefreshingAll(false);
@@ -431,7 +421,6 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
       {/* TOP HEADER & SIMPLE API CONFIGURATION BANNER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 p-5 rounded-2xl shadow-xs transition-colors">
         <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-mono">
-          <Key className="w-3.5 h-3.5 text-indigo-500" />
           SERP API Key Configuration
         </span>
 
@@ -440,7 +429,7 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
             <Key className="absolute left-3 top-3 w-3.5 h-3.5 text-slate-400" />
             <input
               type="password"
-              placeholder={apiKey ? "••••••••••••••••••••" : "Paste SerpAPI Key..."}
+              placeholder="Paste SerpAPI Key..."
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
               className="p-2 pl-9 pr-3 w-full text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 text-slate-800 dark:text-slate-200 outline-none font-medium focus:border-indigo-500/50 h-[38px] transition-all"
@@ -450,7 +439,7 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
             onClick={handleSaveApiKey}
             className="p-2 px-5 rounded-xl font-extrabold text-xs bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer active:scale-95 transition-all h-[38px] shadow-md shadow-indigo-600/10 text-shadow-sm"
           >
-            Save Key
+            Save Button
           </button>
         </div>
       </div>
