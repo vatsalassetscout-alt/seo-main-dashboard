@@ -13,13 +13,20 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Body must be an array of trackers' });
     }
 
-    const clientEmail   = process.env.GOOGLE_CLIENT_EMAIL;
-    const privateKey    = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+    let clientEmail   = process.env.GOOGLE_CLIENT_EMAIL;
+    let rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY || '';
     const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
     if (!clientEmail)   return res.status(500).json({ error: 'GOOGLE_CLIENT_EMAIL env var not set' });
-    if (!privateKey)    return res.status(500).json({ error: 'GOOGLE_PRIVATE_KEY env var not set' });
+    if (!rawPrivateKey)  return res.status(500).json({ error: 'GOOGLE_PRIVATE_KEY env var not set' });
     if (!spreadsheetId) return res.status(500).json({ error: 'GOOGLE_SHEET_ID env var not set' });
+
+    // Handle quote wrapping and escaped newlines correctly in Vercel
+    let privateKey = rawPrivateKey.replace(/\\n/g, '\n');
+    if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+      privateKey = privateKey.slice(1, -1);
+    }
+    privateKey = privateKey.trim();
 
     const auth = new google.auth.GoogleAuth({
       credentials: { client_email: clientEmail, private_key: privateKey },
@@ -28,10 +35,14 @@ module.exports = async (req, res) => {
 
     const sheets = google.sheets({ version: 'v4', auth });
 
+    // 1. Fetch spreadsheet sheet tabs to avoid 500 error if Sheet1 is named differently or missing
+    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    const sheetName = meta.data.sheets?.[0]?.properties?.title || 'Sheet1';
+
     // Clear existing data rows (keep header row 1)
     await sheets.spreadsheets.values.clear({
       spreadsheetId,
-      range: 'Sheet1!A2:F',
+      range: `${sheetName}!A2:F`,
     });
 
     if (trackers.length > 0) {
@@ -46,7 +57,7 @@ module.exports = async (req, res) => {
 
       await sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: 'Sheet1!A2',
+        range: `${sheetName}!A2`,
         valueInputOption: 'RAW',
         requestBody: { values },
       });
