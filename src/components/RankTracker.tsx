@@ -94,6 +94,17 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
     }
   };
 
+  const loadSampleBackup = () => {
+    const sampleTrackers: Tracker[] = [
+      { id: '1', domain: 'apple.com', keyword: 'iphone buy online', country: 'us', pos: 1, checked: new Date(Date.now() - 3600000 * 2).toISOString() },
+      { id: '2', domain: 'apple.com', keyword: 'tablet specs', country: 'us', pos: 3, checked: new Date(Date.now() - 3600000 * 2).toISOString() },
+      { id: '3', domain: 'assetscout.in', keyword: 'real estate pune', country: 'in', pos: 8, checked: new Date(Date.now() - 3600000 * 4).toISOString() },
+      { id: '4', domain: 'microsoft.com', keyword: 'cloud software enterprise', country: 'us', pos: 14, checked: new Date(Date.now() - 3600000 * 12).toISOString() }
+    ];
+    setTrackers(sampleTrackers);
+    localStorage.setItem('rp_trackers', JSON.stringify(sampleTrackers));
+  };
+
   // 2. Load Trackers from local storage OR standard sheets API
   const loadTrackersData = async () => {
     setIsLoading(true);
@@ -101,34 +112,41 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
     try {
       const response = await fetch('/api/get-trackers');
       if (response.ok) {
+        // Detect HTML redirect page (Vercel SPA index fallback returns HTML instead of JSON)
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("html")) {
+          throw new Error("API returned generic HTML page because the Express backend server is bypassed on Vercel deployment.");
+        }
+
         const remoteData = await response.json();
-        if (Array.isArray(remoteData)) {
+        if (Array.isArray(remoteData) && remoteData.length > 0) {
           setTrackers(remoteData);
           successfullyLoaded = true;
+        } else if (Array.isArray(remoteData) && remoteData.length === 0) {
+          console.log("Connected to Google Sheets, but the worksheet ranges are empty.");
+          // We set trackers database as empty but don't set successfullyLoaded to true,
+          // so local storage or sample tracers can serve as high-fidelity presentation fallback
         }
       }
     } catch (err: any) {
-      console.log('Skipping remote fetch, falling back to local database.');
+      console.log('Skipping remote fetch, falling back to local database:', err?.message || err);
     }
 
     if (!successfullyLoaded) {
       const localString = localStorage.getItem('rp_trackers');
       if (localString) {
         try {
-          setTrackers(JSON.parse(localString));
+          const parsed = JSON.parse(localString);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setTrackers(parsed);
+          } else {
+            loadSampleBackup();
+          }
         } catch {
-          setTrackers([]);
+          loadSampleBackup();
         }
       } else {
-        // Hydrate with some interactive sample keyword rank trackers to let users test instantly
-        const sampleTrackers: Tracker[] = [
-          { id: '1', domain: 'apple.com', keyword: 'iphone buy online', country: 'us', pos: 1, checked: new Date(Date.now() - 3600000 * 2).toISOString() },
-          { id: '2', domain: 'apple.com', keyword: 'tablet specs', country: 'us', pos: 3, checked: new Date(Date.now() - 3600000 * 2).toISOString() },
-          { id: '3', domain: 'assetscout.in', keyword: 'real estate pune', country: 'in', pos: 8, checked: new Date(Date.now() - 3600000 * 4).toISOString() },
-          { id: '4', domain: 'microsoft.com', keyword: 'cloud software enterprise', country: 'us', pos: 14, checked: new Date(Date.now() - 3600000 * 12).toISOString() }
-        ];
-        setTrackers(sampleTrackers);
-        localStorage.setItem('rp_trackers', JSON.stringify(sampleTrackers));
+        loadSampleBackup();
       }
     }
 
@@ -558,10 +576,26 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40 text-xs text-slate-750 dark:text-slate-300">
-              {domainGroups.length === 0 ? (
+               {domainGroups.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-12 text-center text-slate-450 dark:text-slate-500 font-mono">
-                    No web assets currently targeted. Use the tracking card above to add your first domain checker.
+                  <td colSpan={5} className="p-12 text-center text-slate-500 dark:text-slate-400">
+                    <div className="max-w-md mx-auto space-y-4">
+                      <p className="font-mono text-xs leading-relaxed">
+                        No web assets currently targeted. If you have connected Google Sheets, make sure your Sheet table has at least one keyword row, or that your Vercel Environment Variables are fully populated.
+                      </p>
+                      <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            loadSampleBackup();
+                            showToast("Loaded high-fidelity mock trackers successfully!");
+                          }}
+                          className="px-4 py-2 border border-slate-250 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-205 rounded-xl cursor-pointer transition-all"
+                        >
+                          🔌 Load Interactive Test Sandbox Trackers
+                        </button>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ) : (
