@@ -119,13 +119,9 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
         }
 
         const remoteData = await response.json();
-        if (Array.isArray(remoteData) && remoteData.length > 0) {
+        if (Array.isArray(remoteData)) {
           setTrackers(remoteData);
           successfullyLoaded = true;
-        } else if (Array.isArray(remoteData) && remoteData.length === 0) {
-          console.log("Connected to Google Sheets, but the worksheet ranges are empty.");
-          // We set trackers database as empty but don't set successfullyLoaded to true,
-          // so local storage or sample tracers can serve as high-fidelity presentation fallback
         }
       }
     } catch (err: any) {
