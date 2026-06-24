@@ -1,8 +1,44 @@
+import dotenv from "dotenv";
+dotenv.config({ override: true });
+
 import express from "express";
 import path from "path";
 import axios from "axios";
 import { google } from "googleapis";
 import { createServer as createViteServer } from "vite";
+
+function cleanPrivateKey(rawKey: string | undefined): string {
+  if (!rawKey) return "";
+  let key = rawKey.trim();
+  
+  // Strip outer quotes if present (double or single quotes)
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1).trim();
+  }
+  
+  // Replace escaped newlines with actual newlines
+  key = key.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
+  
+  // Extract strictly the BEGIN and END block if they exist
+  const startMarker = "-----BEGIN PRIVATE KEY-----";
+  const endMarker = "-----END PRIVATE KEY-----";
+  
+  if (key.includes(startMarker)) {
+    const startIdx = key.indexOf(startMarker);
+    if (startIdx !== -1) {
+      key = key.substring(startIdx);
+    }
+  }
+  
+  if (key.includes(endMarker)) {
+    const endIdx = key.indexOf(endMarker);
+    if (endIdx !== -1) {
+      key = key.substring(0, endIdx + endMarker.length);
+    }
+  }
+  
+  return key;
+}
 
 async function startServer() {
   const app = express();
@@ -21,6 +57,10 @@ async function startServer() {
     const leadsPrivateKey = process.env.GOOGLE_LEADS_PRIVATE_KEY || privateKey;
     const leadsSpreadsheetId = process.env.GOOGLE_LEADS_SHEET_ID;
 
+    // Diagnose the key structure safely
+    const rawKey = privateKey || "";
+    const cleanedKey = cleanPrivateKey(rawKey);
+
     res.json({
       configured: !!(clientEmail && privateKey && spreadsheetId),
       hasEmail: !!clientEmail,
@@ -32,7 +72,22 @@ async function startServer() {
       hasLeadsSpecificEmail: !!process.env.GOOGLE_LEADS_CLIENT_EMAIL,
       hasLeadsSpecificKey: !!process.env.GOOGLE_LEADS_PRIVATE_KEY,
       leadsSheetId: leadsSpreadsheetId || null,
-      leadsClientEmail: leadsClientEmail || null
+      leadsClientEmail: leadsClientEmail || null,
+      
+      // Safe diagnostics for private key format (not exposing secret content)
+      keyDiagnostics: {
+        rawLength: rawKey.length,
+        cleanedLength: cleanedKey.length,
+        rawStartsWith: rawKey.substring(0, 30),
+        rawEndsWith: rawKey.substring(Math.max(0, rawKey.length - 30)),
+        cleanedStartsWith: cleanedKey.substring(0, 30),
+        cleanedEndsWith: cleanedKey.substring(Math.max(0, cleanedKey.length - 30)),
+        hasBeginMarker: cleanedKey.includes("-----BEGIN PRIVATE KEY-----"),
+        hasEndMarker: cleanedKey.includes("-----END PRIVATE KEY-----"),
+        rawNewlinesCount: (rawKey.match(/\n/g) || []).length,
+        rawEscapedNewlinesCount: (rawKey.match(/\\n/g) || []).length,
+        cleanedNewlinesCount: (cleanedKey.match(/\n/g) || []).length
+      }
     });
   });
 
@@ -160,11 +215,7 @@ async function startServer() {
       }
 
       // Handle quote wrapping and escaped newlines correctly 
-      let privateKey = rawPrivateKey.replace(/\\n/g, "\n");
-      if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
-        privateKey = privateKey.slice(1, -1);
-      }
-      privateKey = privateKey.trim();
+      const privateKey = cleanPrivateKey(rawPrivateKey);
 
       const auth = new google.auth.GoogleAuth({
         credentials: { client_email: clientEmail, private_key: privateKey },
@@ -220,11 +271,7 @@ async function startServer() {
       }
 
       // Handle quote wrapping and escaped newlines correctly
-      let privateKey = rawPrivateKey.replace(/\\n/g, "\n");
-      if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
-        privateKey = privateKey.slice(1, -1);
-      }
-      privateKey = privateKey.trim();
+      const privateKey = cleanPrivateKey(rawPrivateKey);
 
       const auth = new google.auth.GoogleAuth({
         credentials: { client_email: clientEmail, private_key: privateKey },
