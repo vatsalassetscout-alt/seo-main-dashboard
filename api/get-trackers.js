@@ -1,6 +1,39 @@
-const { google } = require('googleapis');
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 
-module.exports = async (req, res) => {
+import { google } from 'googleapis';
+
+function cleanPrivateKey(rawKey) {
+  if (!rawKey) return '';
+  let key = rawKey.trim();
+  
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1).trim();
+  }
+  
+  key = key.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
+  
+  const startMarker = '-----BEGIN PRIVATE KEY-----';
+  const endMarker = '-----END PRIVATE KEY-----';
+  
+  if (key.includes(startMarker)) {
+    const startIdx = key.indexOf(startMarker);
+    if (startIdx !== -1) {
+      key = key.substring(startIdx);
+    }
+  }
+  
+  if (key.includes(endMarker)) {
+    const endIdx = key.indexOf(endMarker);
+    if (endIdx !== -1) {
+      key = key.substring(0, endIdx + endMarker.length);
+    }
+  }
+  
+  return key;
+}
+
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -17,11 +50,7 @@ module.exports = async (req, res) => {
     if (!spreadsheetId) return res.status(500).json({ error: 'GOOGLE_SHEET_ID env var not set' });
 
     // Handle quote wrapping and escaped newlines correctly in Vercel
-    let privateKey = rawPrivateKey.replace(/\\n/g, '\n');
-    if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
-      privateKey = privateKey.slice(1, -1);
-    }
-    privateKey = privateKey.trim();
+    const privateKey = cleanPrivateKey(rawPrivateKey);
 
     const auth = new google.auth.GoogleAuth({
       credentials: { client_email: clientEmail, private_key: privateKey },
@@ -56,6 +85,6 @@ module.exports = async (req, res) => {
 
   } catch (err) {
     console.error('get-trackers error:', err.message);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message, stack: err.stack });
   }
-};
+}
