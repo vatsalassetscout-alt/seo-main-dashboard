@@ -58,6 +58,10 @@ async function startServer() {
     const leadsPrivateKey = process.env.GOOGLE_LEADS_PRIVATE_KEY || privateKey;
     const leadsSpreadsheetId = process.env.GOOGLE_LEADS_SHEET_ID;
 
+    const gscClientEmail = process.env.GOOGLE_GSC_CLIENT_EMAIL || clientEmail;
+    const gscPrivateKey = process.env.GOOGLE_GSC_PRIVATE_KEY || privateKey;
+    const gscSpreadsheetId = process.env.GOOGLE_GSC_SHEET_ID || spreadsheetId;
+
     // Diagnose the key structure safely
     const rawKey = privateKey || "";
     const cleanedKey = cleanPrivateKey(rawKey);
@@ -74,6 +78,11 @@ async function startServer() {
       hasLeadsSpecificKey: !!process.env.GOOGLE_LEADS_PRIVATE_KEY,
       leadsSheetId: leadsSpreadsheetId || null,
       leadsClientEmail: leadsClientEmail || null,
+      gscConfigured: !!(gscClientEmail && gscPrivateKey && gscSpreadsheetId),
+      hasGscSpecificEmail: !!process.env.GOOGLE_GSC_CLIENT_EMAIL,
+      hasGscSpecificKey: !!process.env.GOOGLE_GSC_PRIVATE_KEY,
+      gscSheetId: gscSpreadsheetId || null,
+      gscClientEmail: gscClientEmail || null,
       
       // Safe diagnostics for private key format (not exposing secret content)
       keyDiagnostics: {
@@ -333,8 +342,8 @@ async function startServer() {
         return res.status(400).json({ error: "Missing start or end parameters" });
       }
 
-      const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-      const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
+      const clientEmail = process.env.GOOGLE_GSC_CLIENT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
+      const rawPrivateKey = process.env.GOOGLE_GSC_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY;
       const spreadsheetId = process.env.GOOGLE_GSC_SHEET_ID || process.env.GOOGLE_SHEET_ID;
 
       if (!clientEmail || !rawPrivateKey || !spreadsheetId) {
@@ -417,8 +426,8 @@ async function startServer() {
         return res.status(400).json({ error: "Missing start, end, or data parameters" });
       }
 
-      const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-      const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
+      const clientEmail = process.env.GOOGLE_GSC_CLIENT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
+      const rawPrivateKey = process.env.GOOGLE_GSC_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY;
       const spreadsheetId = process.env.GOOGLE_GSC_SHEET_ID || process.env.GOOGLE_SHEET_ID;
 
       if (!clientEmail || !rawPrivateKey || !spreadsheetId) {
