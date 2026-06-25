@@ -55,6 +55,7 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
   const [trackers, setTrackers] = useState<Tracker[]>([]);
   const [apiKey, setApiKey] = useState('');
   const [config, setConfig] = useState<ConfigStatus | null>(null);
+  const [sheetsError, setSheetsError] = useState<string | null>(null);
   const [activeDomain, setActiveDomain] = useState<string | null>(null);
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
 
@@ -108,6 +109,7 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
   // 2. Load Trackers from local storage OR standard sheets API
   const loadTrackersData = async () => {
     setIsLoading(true);
+    setSheetsError(null);
     let successfullyLoaded = false;
     try {
       const response = await fetch('/api/get-trackers');
@@ -123,9 +125,16 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
           setTrackers(remoteData);
           successfullyLoaded = true;
         }
+      } else {
+        const errorJson = await response.json().catch(() => ({}));
+        const errorMsg = errorJson.error || `HTTP ${response.status} ${response.statusText}`;
+        setSheetsError(errorMsg);
+        showToast(`Google Sheets Sync Error: ${errorMsg}`, 'error');
       }
     } catch (err: any) {
-      console.log('Skipping remote fetch, falling back to local database:', err?.message || err);
+      const errorMsg = err?.message || String(err);
+      setSheetsError(errorMsg);
+      console.log('Skipping remote fetch, falling back to local database:', errorMsg);
     }
 
     if (!successfullyLoaded) {
@@ -164,13 +173,23 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
     localStorage.setItem('rp_trackers', JSON.stringify(updatedTrackers));
 
     try {
-      await fetch('/api/save-trackers', {
+      const response = await fetch('/api/save-trackers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedTrackers)
       });
-    } catch {
-      // Silent error fallback to localStorage persistence
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        const errorMsg = errorJson.error || `HTTP ${response.status} ${response.statusText}`;
+        setSheetsError(errorMsg);
+        showToast(`Google Sheets Sync Error: ${errorMsg}`, 'error');
+      } else {
+        setSheetsError(null);
+      }
+    } catch (err: any) {
+      const errorMsg = err?.message || String(err);
+      setSheetsError(errorMsg);
+      showToast(`Local save successful. Google Sheet sync failed: ${errorMsg}`, 'error');
     }
   };
 
@@ -219,11 +238,6 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
 
   // 6. Check single keyword tracker SERP Rank positional index
   const runSERPCheck = async (id: string, currentList: Tracker[]): Promise<Tracker[]> => {
-    if (!apiKey) {
-      showToast(' SerAPI Key is required to perform live Rank tracking audits. Please save your key first.', 'error');
-      return currentList;
-    }
-
     const itemIdx = currentList.findIndex((t) => t.id === id);
     if (itemIdx === -1) return currentList;
 
@@ -312,9 +326,7 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
 
     await handleSave(nextTrackersList);
 
-    if (apiKey) {
-      runSERPCheck(newId, nextTrackersList);
-    }
+    runSERPCheck(newId, nextTrackersList);
   };
 
   // 8. Add keyword from within the Domain View Modal popup
@@ -354,9 +366,7 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
 
     await handleSave(nextTrackersList);
 
-    if (apiKey) {
-      runSERPCheck(newId, nextTrackersList);
-    }
+    runSERPCheck(newId, nextTrackersList);
   };
 
   // 9. Delete single tracker phrase
@@ -381,10 +391,6 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
   };
 
   const handleRefreshAll = async () => {
-    if (!apiKey) {
-      showToast('SerpAPI key is missing. Save key first to enable real audits.', 'error');
-      return;
-    }
     if (trackers.length === 0) {
       showToast('No keyword trackers configured yet.', 'info');
       return;
@@ -432,10 +438,12 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
         ))}
       </div>
 
+
+
       {/* TOP HEADER & SIMPLE API CONFIGURATION BANNER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 p-5 rounded-2xl shadow-xs transition-colors">
         <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-mono">
-          SERP API Key Configuration
+          Organic Rank Scraper (Free & Active) / Optional SerpAPI Key
         </span>
 
         <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
@@ -443,7 +451,7 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
             <Key className="absolute left-3 top-3 w-3.5 h-3.5 text-slate-400" />
             <input
               type="password"
-              placeholder="Paste SerpAPI Key..."
+              placeholder="Optional SerpAPI Key..."
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
               className="p-2 pl-9 pr-3 w-full text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 text-slate-800 dark:text-slate-200 outline-none font-medium focus:border-indigo-500/50 h-[38px] transition-all"
@@ -453,7 +461,7 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
             onClick={handleSaveApiKey}
             className="p-2 px-5 rounded-xl font-extrabold text-xs bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer active:scale-95 transition-all h-[38px] shadow-md shadow-indigo-600/10 text-shadow-sm"
           >
-            Save Button
+            Save Key
           </button>
         </div>
       </div>
@@ -534,7 +542,11 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
             onChange={(e) => setInpCountry(e.target.value)}
             className="w-full p-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-500/50 font-bold h-[38px] cursor-pointer"
           >
-            <option value="in">🇮🇳 India</option>
+            {Object.entries(COUNTRY_NAMES).map(([code, name]) => (
+              <option key={code} value={code}>
+                {FLAGS[code] || ""} {name}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -714,7 +726,11 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
                   onChange={(e) => setModalInpCountry(e.target.value)}
                   className="w-full p-2 text-xs rounded-lg border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-805 dark:text-slate-200 outline-none focus:border-indigo-500 font-bold h-[38px]"
                 >
-                  <option value="in">🇮🇳 India</option>
+                  {Object.entries(COUNTRY_NAMES).map(([code, name]) => (
+                    <option key={code} value={code}>
+                      {FLAGS[code] || ""} {name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
