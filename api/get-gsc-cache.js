@@ -13,20 +13,26 @@ function cleanPrivateKey(rawKey) {
   
   key = key.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
   
-  const startMarker = '-----BEGIN PRIVATE KEY-----';
-  const endMarker = '-----END PRIVATE KEY-----';
+  const startMatch = key.match(/-----BEGIN [A-Z ]+PRIVATE KEY-----/);
+  const endMatch = key.match(/-----END [A-Z ]+PRIVATE KEY-----/);
   
-  if (key.includes(startMarker)) {
+  if (startMatch && endMatch) {
+    const startMarker = startMatch[0];
+    const endMarker = endMatch[0];
+    
     const startIdx = key.indexOf(startMarker);
-    if (startIdx !== -1) {
-      key = key.substring(startIdx);
-    }
-  }
-  
-  if (key.includes(endMarker)) {
     const endIdx = key.indexOf(endMarker);
-    if (endIdx !== -1) {
-      key = key.substring(0, endIdx + endMarker.length);
+    
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      let body = key.substring(startIdx + startMarker.length, endIdx).trim();
+      body = body.replace(/[\s\r\n\\]/g, '');
+      
+      const chunks = [];
+      for (let i = 0; i < body.length; i += 64) {
+        chunks.push(body.substring(i, i + 64));
+      }
+      
+      return `${startMarker}\n${chunks.join('\n')}\n${endMarker}`;
     }
   }
   
