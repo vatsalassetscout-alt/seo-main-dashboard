@@ -80,11 +80,155 @@ export default function App() {
   const [activePage, setActivePage] = useState<'home' | 'leads' | 'ranks'>('home');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Initial High-Fidelity SEO Audit Inbound Leads Data (starts clean)
-  const [leads, setLeads] = useState<Lead[]>([]);
+  // Initial High-Fidelity SEO Audit Inbound Leads Mock Data
+  const [leads, setLeads] = useState<Lead[]>([
+    {
+      id: 'L-101',
+      clientName: 'Sarah Jenkins',
+      websiteUrl: 'ecommercerush.com',
+      email: 's.jenkins@ecommercerush.com',
+      phone: '+1 (555) 234-5678',
+      requestedDate: '2026-06-16',
+      healthRating: 'Critical',
+      status: 'Analyzing',
+      score: 52,
+      errorsCount: 42,
+      warningsCount: 89,
+      notes: 'Main product collections are experiencing extremely high crawl latencies.'
+    },
+    {
+      id: 'L-102',
+      clientName: 'Daniel Vance',
+      websiteUrl: 'financepro.com',
+      email: 'daniel@financepro.com',
+      phone: '+1 (555) 876-5432',
+      requestedDate: '2026-06-15',
+      healthRating: 'Warnings',
+      status: 'Audit Ready',
+      score: 74,
+      errorsCount: 12,
+      warningsCount: 35,
+      notes: 'SSL certificate warnings resolved. Sitemaps submitted but index coverage is stagnant.'
+    },
+    {
+      id: 'L-103',
+      clientName: 'Alex Mercer',
+      websiteUrl: 'pixelcreative.agency',
+      email: 'alex@pixelcreative.co',
+      phone: '+44 20 7946 0958',
+      requestedDate: '2026-06-14',
+      healthRating: 'Optimal',
+      status: 'Closed/Won',
+      score: 93,
+      errorsCount: 1,
+      warningsCount: 6,
+      notes: 'Lighthouse scoring at 98%. Onboarding completed onto the active technical retainer.'
+    },
+    {
+      id: 'L-104',
+      clientName: 'Emma Watson',
+      websiteUrl: 'homesteaddecor.co.uk',
+      email: 'emma@homesteaddecor.co.uk',
+      phone: '+44 7911 123456',
+      requestedDate: '2026-06-12',
+      healthRating: 'Critical',
+      status: 'Pending Request',
+      score: 41,
+      errorsCount: 78,
+      warningsCount: 145,
+      notes: 'Massive duplication in canonical declarations detected inside multi-language routes.'
+    },
+    {
+      id: 'L-105',
+      clientName: 'Rajesh Kumar',
+      websiteUrl: 'globaltechsolutions.in',
+      email: 'rajesh@globaltech.in',
+      phone: '+91 98765 43210',
+      requestedDate: '2026-06-10',
+      healthRating: 'Warnings',
+      status: 'Archived',
+      score: 68,
+      errorsCount: 22,
+      warningsCount: 64,
+      notes: 'Client postponed the organic engagement until Q4 budget releases.'
+    }
+  ]);
 
-  // Initial High-Fidelity SEO Keyword Rank Tracker Data (starts clean)
-  const [trackedKeywords, setTrackedKeywords] = useState<TrackedKeyword[]>([]);
+  // Initial High-Fidelity SEO Keyword Rank Tracker Mock Data
+  const [trackedKeywords, setTrackedKeywords] = useState<TrackedKeyword[]>([
+    {
+      id: 'K-001',
+      keyword: 'best gold credit card broker',
+      domain: 'financepro.com',
+      desktopRank: 3,
+      mobileRank: 4,
+      desktopPrev: 6,
+      mobilePrev: 4,
+      searchVolume: 2400,
+      competition: 'High',
+      estTraffic: 380
+    },
+    {
+      id: 'K-002',
+      keyword: 'unsecured corporate debt solutions',
+      domain: 'financepro.com',
+      desktopRank: 12,
+      mobileRank: 15,
+      desktopPrev: 18,
+      mobilePrev: 24,
+      searchVolume: 850,
+      competition: 'High',
+      estTraffic: 45
+    },
+    {
+      id: 'K-003',
+      keyword: 'asset valuation systems manual',
+      domain: 'assetscout.in',
+      desktopRank: 1,
+      mobileRank: 1,
+      desktopPrev: 1,
+      mobilePrev: 2,
+      searchVolume: 1200,
+      competition: 'Medium',
+      estTraffic: 610
+    },
+    {
+      id: 'K-004',
+      keyword: 'seo site speed rank factor',
+      domain: 'scout-seo.com',
+      desktopRank: 5,
+      mobileRank: 7,
+      desktopPrev: 4,
+      mobilePrev: 9,
+      searchVolume: 3200,
+      competition: 'Medium',
+      estTraffic: 240
+    },
+    {
+      id: 'K-005',
+      keyword: 'ecommerce multi-currency canonical tags',
+      domain: 'ecommercerush.com',
+      desktopRank: 2,
+      mobileRank: 3,
+      desktopPrev: 9,
+      mobilePrev: 12,
+      searchVolume: 450,
+      competition: 'Low',
+      estTraffic: 110
+    },
+    {
+      id: 'K-006',
+      keyword: 'organic intelligence data pipeline',
+      domain: 'assetscout.in',
+      desktopRank: 8,
+      mobileRank: 10,
+      desktopPrev: 14,
+      mobilePrev: 15,
+      searchVolume: 980,
+      competition: 'Medium',
+      estTraffic: 85
+    }
+  ]);
 
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -97,7 +241,10 @@ export default function App() {
   const [allData, setAllData] = useState<SiteData[]>([]);
   const [timeSeries, setTimeSeries] = useState<TimeSeriesEntry[]>([]);
   const [activeMetrics, setActiveMetrics] = useState<Set<string>>(new Set(['clicks', 'impressions', 'ctr', 'position']));
-  const [gscConnected, setGscConnected] = useState<boolean>(false);
+  const [gscConnected, setGscConnected] = useState<boolean>(() => {
+    const hasCode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('code');
+    return hasCode || !!localStorage.getItem('gsc_refresh');
+  });
   const [showAdvancedAuth, setShowAdvancedAuth] = useState(false);
 
   // Cache display rate
@@ -125,17 +272,14 @@ export default function App() {
 
   // Sync structural margins/responsiveness on load
   useEffect(() => {
-    const effectiveTheme = gscConnected ? theme : 'light';
-    document.documentElement.setAttribute('data-theme', effectiveTheme);
-    if (effectiveTheme === 'dark') {
+    document.documentElement.setAttribute('data-theme', theme);
+    if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-    if (gscConnected) {
-      localStorage.setItem('theme', theme);
-    }
-  }, [theme, gscConnected]);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
 
 
@@ -222,21 +366,39 @@ export default function App() {
       return;
     }
 
+    setShowProgress(true);
+    setLoadingPercent(5);
+    setLoadingText('Initializing offline demo database...');
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    setLoadingPercent(35);
+    setLoadingText('Compiling properties catalog...');
+
     const mockSitesList: SiteData[] = [
-      { url: 'sc-domain:mybusiness.com', name: 'mybusiness.com', type: 'Domain', clicks: 5820, impressions: 145000, ctr: 4.01, position: 2.1 },
-      { url: 'https://shop.mybusiness.com/', name: 'shop.mybusiness.com', type: 'URL', clicks: 3120, impressions: 98000, ctr: 3.18, position: 1.6 },
-      { url: 'https://blog.mybusiness.com/', name: 'blog.mybusiness.com', type: 'URL', clicks: 1250, impressions: 45000, ctr: 2.77, position: 4.1 },
-      { url: 'sc-domain:portfoliosite.io', name: 'portfoliosite.io', type: 'Domain', clicks: 2150, impressions: 76000, ctr: 2.83, position: 5.6 },
-      { url: 'sc-domain:documentation.io', name: 'documentation.io', type: 'Domain', clicks: 1680, impressions: 58000, ctr: 2.89, position: 3.2 },
-      { url: 'sc-domain:careers.mybusiness.com', name: 'careers.mybusiness.com', type: 'Domain', clicks: 430, impressions: 16200, ctr: 2.65, position: 11.4 },
-      { url: 'sc-domain:staging.mybusiness.com', name: 'staging.mybusiness.com', type: 'Domain', clicks: 0, impressions: 0, ctr: 0, position: 0 },
-      { url: 'https://dev.portfoliosite.io/', name: 'dev.portfoliosite.io', type: 'URL', clicks: 0, impressions: 0, ctr: 0, position: 0 }
+      { url: 'sc-domain:assetscout.in', name: 'assetscout.in', type: 'Domain', clicks: 4520, impressions: 128400, ctr: 3.52, position: 2.4 },
+      { url: 'https://blog.assetscout.in/', name: 'blog.assetscout.in', type: 'URL', clicks: 1840, impressions: 85300, ctr: 2.16, position: 4.9 },
+      { url: 'https://app.assetscout.in/', name: 'app.assetscout.in', type: 'URL', clicks: 3150, impressions: 92100, ctr: 3.42, position: 1.8 },
+      { url: 'sc-domain:scout-seo.com', name: 'scout-seo.com', type: 'Domain', clicks: 2450, impressions: 114000, ctr: 2.15, position: 8.3 },
+      { url: 'sc-domain:careers.assetscout.in', name: 'careers.assetscout.in', type: 'Domain', clicks: 480, impressions: 18900, ctr: 2.54, position: 12.1 },
+      { url: 'sc-domain:docs.scout-seo.com', name: 'docs.scout-seo.com', type: 'Domain', clicks: 1520, impressions: 64200, ctr: 2.37, position: 3.2 },
+      { url: 'sc-domain:staging.assetscout.in', name: 'staging.assetscout.in', type: 'Domain', clicks: 0, impressions: 0, ctr: 0, position: 0 },
+      { url: 'https://dev-assets.scout-seo.com/', name: 'dev-assets.scout-seo.com', type: 'URL', clicks: 0, impressions: 0, ctr: 0, position: 0 }
     ];
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    setLoadingPercent(75);
+    setLoadingText('Synthesizing high-fidelity metrics over time...');
 
     const series = generateMockTimeSeries(start, end, mockSitesList);
     setTimeSeries(series);
     setAllData(mockSitesList);
-    setGscConnected(true);
+
+    setLoadingPercent(100);
+    setLoadingText('Completed!');
+    setTimeout(() => {
+      setShowProgress(false);
+      setGscConnected(true);
+    }, 400);
   };
 
   const logout = () => {
@@ -274,7 +436,7 @@ export default function App() {
             pullMainAnalytics();
           })
           .catch(() => {
-            setGscConnected(false);
+            logout();
           });
       } else {
         setGscConnected(false);
@@ -531,6 +693,7 @@ export default function App() {
   const pullMainAnalytics = async (isForce = false) => {
     const { start, end } = getDates();
     if (!start || !end) {
+      alert('Selected dates are invalid.');
       return;
     }
 
@@ -539,15 +702,40 @@ export default function App() {
     }
 
     if (!hasValidSession()) {
-      setGscConnected(false);
       return;
     }
 
     setShowProgress(true);
     setLoadingPercent(0);
-    setLoadingText('Initializing connection...');
+    setLoadingText('Checking backend cache...');
 
     try {
+      // 1. Try checking the Google Sheet cache first unless isForce is true
+      if (!isForce) {
+        try {
+          const cacheRes = await fetch(`/api/get-gsc-cache?start=${start}&end=${end}`);
+          if (cacheRes.ok) {
+            const cacheJson = await cacheRes.json();
+            if (cacheJson.found && cacheJson.data) {
+              const cached = cacheJson.data;
+              if (Array.isArray(cached.allData) && Array.isArray(cached.timeSeries)) {
+                setLoadingPercent(80);
+                setLoadingText('Loading from sheet database...');
+                setAllData(cached.allData);
+                setTimeSeries(cached.timeSeries);
+                setLoadingPercent(100);
+                setLoadingText('Loaded (Fast Sheet Cache!)');
+                setTimeout(() => setShowProgress(false), 500);
+                return;
+              }
+            }
+          }
+        } catch (cacheErr) {
+          console.warn("Could not read GSC cache from Google Sheets:", cacheErr);
+        }
+      }
+
+      // If not found in cache or isForce is true, do standard live loading
       const token = await getValidToken();
       setLoadingText('Querying GSC property directories...');
       const list = await fetchSitesList(token);
@@ -583,11 +771,30 @@ export default function App() {
       setLoadingPercent(95);
       setLoadingText('Compiling historical timeline performance graph...');
 
+      let fullHistory: TimeSeriesEntry[] = [];
       try {
-        const fullHistory = await fetchTimeSeriesFull(computedEntries, start, end, token);
+        fullHistory = await fetchTimeSeriesFull(computedEntries, start, end, token);
         setTimeSeries(fullHistory);
       } catch {
         setTimeSeries([]);
+      }
+
+      // Save to Google Sheet Cache in the background for instant future loads
+      try {
+        await fetch("/api/save-gsc-cache", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            start,
+            end,
+            data: {
+              allData: computedEntries,
+              timeSeries: fullHistory
+            }
+          })
+        });
+      } catch (saveErr) {
+        console.warn("Failed to write GSC cache to Google Sheets:", saveErr);
       }
 
       setLoadingPercent(100);
@@ -606,7 +813,12 @@ export default function App() {
     pullMainAnalytics(true);
   };
 
-  // Re-pull as presets change (disabled as per user request to only refresh when clicking Apply)
+  // Re-pull as presets change (except for custom preset, which requires manual 'Apply' click)
+  useEffect(() => {
+    if (gscConnected && preset !== 'custom') {
+      pullMainAnalytics(false);
+    }
+  }, [preset]);
 
   // Overall Statistics aggregates
   const totals = useMemo(() => {
@@ -789,6 +1001,7 @@ export default function App() {
 
       if (!hasValidSession()) {
         // Safe mock fallback for demo mode
+        await new Promise((resolve) => setTimeout(resolve, 350));
         const seriesData = generateMockTimeSeriesForSingleSite(start, end, site);
         const keywordsData = generateMockKeywords(site);
         setSiteDetailsSeries(seriesData);
@@ -1616,16 +1829,13 @@ export default function App() {
           </div>
         </div>
 
-        {/* Sign Out Button */}
+        {/* Auth Disconnect Trigger */}
         <button
-          onClick={() => {
-            setGscConnected(false);
-            setSidebarOpen(false);
-          }}
-          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-semibold cursor-pointer transition-all duration-150 text-rose-600 dark:text-rose-455 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+          onClick={logout}
+          className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-rose-50 dark:bg-rose-950/15 text-rose-600 dark:text-rose-450 border border-rose-200/50 dark:border-rose-900/30 hover:bg-rose-100 hover:text-rose-700 dark:hover:bg-rose-950/30 rounded-xl text-xs font-bold transition-all cursor-pointer"
         >
-          <LogOut className="w-4 h-4 text-rose-550 dark:text-rose-400" />
-          <span>Sign Out</span>
+          <LogOut className="w-3.5 h-3.5" />
+          <span>Signout</span>
         </button>
       </div>
     </div>
@@ -1645,41 +1855,41 @@ export default function App() {
 
   if (!gscConnected) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 text-slate-800 flex flex-col items-center justify-center p-4 transition-colors duration-300 relative">
-        {/* Decorative ambient glowing backdrops */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] md:w-[420px] h-[340px] md:h-[420px] rounded-full bg-indigo-500/10 blur-3xl pointer-events-none select-none" />
-        <div className="absolute top-1/2 left-1/3 -translate-x-1/2 w-[280px] md:w-[350px] h-[280px] md:h-[350px] rounded-full bg-emerald-555/5 blur-3xl pointer-events-none select-none" />
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-[#090f1c] dark:to-[#020617] text-slate-800 dark:text-slate-100 flex flex-col items-center justify-center p-4 transition-colors duration-300 relative">
+        {/* Decorative ambient glowing backdrops in Dark mode */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] md:w-[420px] h-[340px] md:h-[420px] rounded-full bg-indigo-500/10 dark:bg-indigo-500/5 blur-3xl pointer-events-none select-none" />
+        <div className="absolute top-1/2 left-1/3 -translate-x-1/2 w-[280px] md:w-[350px] h-[280px] md:h-[350px] rounded-full bg-emerald-500/5 dark:bg-emerald-500/3 blur-3xl pointer-events-none select-none" />
 
-        <div className="max-w-[480px] w-full bg-white border border-slate-200/65 rounded-3xl shadow-2xl p-8 relative overflow-hidden transition-all duration-300 z-10 flex flex-col items-center">
+        <div className="max-w-[480px] w-full bg-white dark:bg-[#111827] border border-slate-200/65 dark:border-slate-800/85 rounded-3xl shadow-2xl p-8 relative overflow-hidden transition-all duration-300 z-10 flex flex-col items-center">
           {/* Accent glow line at top */}
-          <div className="absolute top-0 inset-x-0 h-[3px] bg-indigo-600" />
+          <div className="absolute top-0 inset-x-0 h-[3px] bg-indigo-600 dark:bg-indigo-500" />
 
           {/* Logo Brand Header */}
           <div className="flex flex-col items-center gap-1.5 mb-6 text-center select-none">
-            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/50 shadow-xs mb-1">
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/50 dark:border-slate-800 shadow-xs mb-1">
               <img
                 src="https://assetscout.in/assets/images/Assetscout%20Logo%20Black.webp"
                 alt="Assetscout Logo"
                 referrerPolicy="no-referrer"
-                className="h-12 w-auto object-contain hover:scale-[1.03] transition-all duration-200"
+                className="h-12 w-auto object-contain dark:invert hover:scale-[1.03] transition-all duration-200"
               />
             </div>
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-900 font-sans">
-              SEO Main Dashboard
+            <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white font-sans">
+              SEO Web Console
             </h1>
-            <p className="text-xs text-slate-400 font-medium tracking-tight">
+            <p className="text-xs text-slate-400 dark:text-slate-500 font-medium tracking-tight">
               Secure Login
             </p>
           </div>
 
           {/* Loading Progress inside Card */}
           {showProgress && (
-            <div className="w-full mb-6 bg-slate-50 border border-slate-250/20 p-4 rounded-xl">
-              <div className="flex justify-between items-center text-[11px] font-semibold font-mono mb-2 text-slate-550">
+            <div className="w-full mb-6 bg-slate-50 dark:bg-[#0d1421] border border-slate-250/20 dark:border-slate-800/50 p-4 rounded-xl">
+              <div className="flex justify-between items-center text-[11px] font-semibold font-mono mb-2 text-slate-550 dark:text-slate-400">
                 <span>{loadingText}</span>
-                <span className="text-indigo-600 font-bold">{loadingPercent}%</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{loadingPercent}%</span>
               </div>
-              <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-indigo-500 via-indigo-600 to-emerald-555 rounded-full transition-all duration-300"
                   style={{ width: `${loadingPercent}%` }}
@@ -1692,10 +1902,10 @@ export default function App() {
           {exchangeMsg && (
             <div className={`w-full p-4 mb-6 rounded-2xl text-xs font-mono leading-relaxed border flex items-start gap-2.5 ${
               exchangeMsg.type === 'err' 
-                ? 'bg-rose-50/50 text-rose-600 border-rose-220/30' 
+                ? 'bg-rose-50/50 dark:bg-rose-950/15 text-rose-600 dark:text-rose-400 border-rose-220/30 dark:border-rose-900/40' 
                 : exchangeMsg.type === 'ok' 
-                ? 'bg-emerald-50/50 text-emerald-600 border-emerald-220/30' 
-                : 'bg-indigo-50/50 text-indigo-600 border-indigo-220/30'
+                ? 'bg-emerald-50/50 dark:bg-emerald-950/15 text-emerald-600 dark:text-emerald-400 border-emerald-220/30 dark:border-emerald-900/40' 
+                : 'bg-indigo-50/50 dark:bg-[#1e1b4b]/20 text-indigo-600 dark:text-indigo-400 border-indigo-220/30 dark:border-indigo-900/40'
             }`}>
               <div className="font-semibold flex-1 select-all">{exchangeMsg.text}</div>
             </div>
@@ -1709,6 +1919,13 @@ export default function App() {
             >
               <Globe className="w-4 h-4" />
               <span>CONNECT SEARCH CONSOLE</span>
+            </button>
+
+            <button
+              onClick={() => loadMockAnalytics(true)}
+              className="w-full py-3 px-5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/45 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-350 font-bold rounded-2xl text-[11px] tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>EXPLORE WITH DEMO SANDBOX</span>
             </button>
           </div>
 
@@ -1752,7 +1969,7 @@ export default function App() {
 
               <div className="text-left">
                 <h1 className="text-lg md:text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2 select-all">
-                  {activePage === 'home' ? 'SEO Main Dashboard' : activePage === 'leads' ? 'SEO Lead Manager' : 'Keyword Rank Tracker'}
+                  {activePage === 'home' ? 'SEO Dashboard' : activePage === 'leads' ? 'SEO Lead Manager' : 'Keyword Rank Tracker'}
                 </h1>
               </div>
             </div>
@@ -1769,16 +1986,23 @@ export default function App() {
               </div>
             </div>
 
-            {/* Right Column: Refresh Reports */}
+            {/* Right Column: Sync Badge */}
             <div className="flex items-center gap-2.5 justify-end w-full md:w-auto">
               <button
                 onClick={handleFullRefresh}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-indigo-600/10"
-                title="Refresh dashboard metrics and clear caching layers immediately"
+                title="Purge caching layers and fetch live metrics immediately from Google GSC APIs"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${showProgress ? 'animate-spin' : ''}`} />
-                <span>Refresh Reports</span>
+                <span>Refresh Live Data</span>
               </button>
+
+              {hasValidSession() && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-semibold font-mono bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-250/20 dark:border-emerald-900/30 shrink-0 select-none">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  <span>Google Sync Authorized</span>
+                </span>
+              )}
             </div>
           </header>
 
