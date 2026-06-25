@@ -82,6 +82,51 @@ async function scrapeYahoo(keyword, country) {
   return urls;
 }
 
+async function scrapeDuckDuckGo(keyword) {
+  const urls = [];
+  try {
+    const response = await axios.get(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(keyword)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9'
+      },
+      timeout: 8000
+    });
+    
+    const $ = cheerio.load(response.data);
+    $('a').each((_, el) => {
+      const href = $(el).attr('href') || '';
+      if (href.includes('uddg=')) {
+        const match = href.match(/[?&]uddg=([^&]+)/);
+        if (match && match[1]) {
+          try {
+            const decoded = decodeURIComponent(match[1]);
+            if (decoded.startsWith('http') && !decoded.includes('duckduckgo.com')) {
+              if (!urls.includes(decoded)) {
+                urls.push(decoded);
+              }
+            }
+          } catch (e) {}
+        }
+      } else if (
+        href.startsWith('http') &&
+        !href.includes('duckduckgo.com') &&
+        !href.includes('google.com') &&
+        !href.includes('yahoo.com') &&
+        !href.includes('bing.com')
+      ) {
+        if (!urls.includes(href)) {
+          urls.push(href);
+        }
+      }
+    });
+  } catch (error) {
+    console.error('DuckDuckGo scrape failed:', error.message);
+  }
+  return urls;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -191,8 +236,24 @@ export default async function handler(req, res) {
 
     // Step B: Organic scraping (Free / zero cost) fallback
     console.log(`Running zero-cost organic parser for keyword: "${keyword}"...`);
-    const urls = await scrapeYahoo(keyword, country);
+    let urls = [];
     usedEngine = 'Yahoo (Organic Scraper)';
+    
+    try {
+      urls = await scrapeYahoo(keyword, country);
+    } catch (e) {
+      console.warn(`Yahoo scan failed: ${e.message}. Falling back to DuckDuckGo...`);
+    }
+
+    if (!urls || urls.length === 0) {
+      console.log('Yahoo returned no results. Running DuckDuckGo search fallback...');
+      try {
+        urls = await scrapeDuckDuckGo(keyword);
+        usedEngine = 'DuckDuckGo (Organic Scraper)';
+      } catch (e) {
+        console.error('DuckDuckGo fallback also failed:', e.message);
+      }
+    }
 
     console.log(`Extracted ${urls.length} URLs using ${usedEngine}`);
 
