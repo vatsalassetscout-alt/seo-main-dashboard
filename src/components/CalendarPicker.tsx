@@ -296,15 +296,17 @@ export function CalendarPicker({
           )}
 
           {/* Actions to apply */}
-          <div className="flex flex-col gap-1.5 self-end">
-            <button
-              type="button"
-              className="p-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-semibold rounded-lg text-xs transition-all flex items-center justify-center cursor-pointer h-[38px] shadow-sm"
-              onClick={onApply}
-            >
-              Apply
-            </button>
-          </div>
+          {preset === 'custom' && (
+            <div className="flex flex-col gap-1.5 self-end">
+              <button
+                type="button"
+                className="p-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-semibold rounded-lg text-xs transition-all flex items-center justify-center cursor-pointer h-[38px] shadow-sm"
+                onClick={onApply}
+              >
+                Apply
+              </button>
+            </div>
+          )}
         </>
       )}
     </>
