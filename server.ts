@@ -348,45 +348,62 @@ async function startServer() {
       });
 
       const sheets = google.sheets({ version: "v4", auth });
-
-      // Ensure GSC_Cache tab exists
-      try {
-        await sheets.spreadsheets.batchUpdate({
-          spreadsheetId,
-          requestBody: {
-            requests: [{ addSheet: { properties: { title: "GSC_Cache" } } }]
-          }
-        });
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: "GSC_Cache!A1",
-          valueInputOption: "RAW",
-          requestBody: {
-            values: [["CacheKey", "CacheData", "UpdatedAt"]]
-          }
-        });
-      } catch (e) {}
-
-      // Fetch all cached records
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: "GSC_Cache!A2:C"
-      });
-
-      const rows = response.data.values || [];
       const cacheKey = `gsc_cache_${start}_${end}`;
-      const matchedRow = rows.find(r => r && r[0] === cacheKey);
 
-      if (matchedRow) {
-        try {
-          const parsedData = JSON.parse(matchedRow[1]);
-          return res.status(200).json({ found: true, data: parsedData });
-        } catch (jsonErr) {
-          console.error("Failed to parse cached GSC JSON:", jsonErr);
-        }
+      // 1. Fetch sites list from GSC_Sites_Db
+      let siteRows: any[] = [];
+      try {
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: "GSC_Sites_Db!A2:I"
+        });
+        siteRows = response.data.values || [];
+      } catch (e) {
+        // Tab might not exist yet, treat as not cached
+        return res.status(200).json({ found: false });
       }
 
-      res.status(200).json({ found: false });
+      // Filter matching current DateRangeKey
+      const filteredSiteRows = siteRows.filter(r => r && r[0] === cacheKey);
+      if (filteredSiteRows.length === 0) {
+        return res.status(200).json({ found: false });
+      }
+
+      // 2. Fetch series points from GSC_Series_Db
+      let seriesRows: any[] = [];
+      try {
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: "GSC_Series_Db!A2:G"
+        });
+        seriesRows = response.data.values || [];
+      } catch (e) {}
+
+      const filteredSeriesRows = seriesRows.filter(r => r && r[0] === cacheKey);
+
+      // Reconstruct final objects
+      const allData = filteredSiteRows.map(r => ({
+        url: r[1] || "",
+        name: r[2] || "",
+        type: (r[3] || "Domain") as "Domain" | "URL",
+        clicks: Number(r[4]) || 0,
+        impressions: Number(r[5]) || 0,
+        ctr: Number(r[6]) || 0,
+        position: Number(r[7]) || 0
+      }));
+
+      const timeSeries = filteredSeriesRows.map(r => ({
+        date: r[1] || "",
+        clicks: Number(r[2]) || 0,
+        impressions: Number(r[3]) || 0,
+        ctr: Number(r[4]) || 0,
+        position: Number(r[5]) || 0
+      }));
+
+      res.status(200).json({
+        found: true,
+        data: { allData, timeSeries }
+      });
     } catch (err: any) {
       console.error("get-gsc-cache error:", err.message);
       res.status(500).json({ error: err.message });
@@ -417,60 +434,116 @@ async function startServer() {
       });
 
       const sheets = google.sheets({ version: "v4", auth });
+      const cacheKey = `gsc_cache_${start}_${end}`;
+      const updatedAt = new Date().toISOString();
 
-      // Ensure GSC_Cache tab exists
+      // Ensure GSC_Sites_Db tab exists
       try {
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId,
           requestBody: {
-            requests: [{ addSheet: { properties: { title: "GSC_Cache" } } }]
+            requests: [{ addSheet: { properties: { title: "GSC_Sites_Db" } } }]
           }
         });
         await sheets.spreadsheets.values.update({
           spreadsheetId,
-          range: "GSC_Cache!A1",
+          range: "GSC_Sites_Db!A1",
           valueInputOption: "RAW",
           requestBody: {
-            values: [["CacheKey", "CacheData", "UpdatedAt"]]
+            values: [["DateRangeKey", "SiteUrl", "SiteName", "SiteType", "Clicks", "Impressions", "Ctr", "Position", "UpdatedAt"]]
           }
         });
       } catch (e) {}
 
-      // Fetch all cached records to see if we should update or insert
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: "GSC_Cache!A:C"
-      });
-
-      const rows = response.data.values || [];
-      const cacheKey = `gsc_cache_${start}_${end}`;
-      const matchedIdx = rows.findIndex(r => r && r[0] === cacheKey);
-
-      const jsonStr = JSON.stringify(data);
-      const updatedAt = new Date().toISOString();
-
-      if (matchedIdx !== -1) {
-        // Update existing row (offset by 1 for 1-based Index)
-        const rowNum = matchedIdx + 1;
+      // Ensure GSC_Series_Db tab exists
+      try {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [{ addSheet: { properties: { title: "GSC_Series_Db" } } }]
+          }
+        });
         await sheets.spreadsheets.values.update({
           spreadsheetId,
-          range: `GSC_Cache!A${rowNum}:C${rowNum}`,
+          range: "GSC_Series_Db!A1",
           valueInputOption: "RAW",
           requestBody: {
-            values: [[cacheKey, jsonStr, updatedAt]]
+            values: [["DateRangeKey", "Date", "Clicks", "Impressions", "Ctr", "Position", "UpdatedAt"]]
           }
         });
-      } else {
-        // Append new row
-        await sheets.spreadsheets.values.append({
-          spreadsheetId,
-          range: "GSC_Cache!A2",
-          valueInputOption: "RAW",
-          requestBody: {
-            values: [[cacheKey, jsonStr, updatedAt]]
-          }
-        });
-      }
+      } catch (e) {}
+
+      // 1. Process and save GSC_Sites_Db
+      const sitesResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: "GSC_Sites_Db!A:I"
+      });
+      const sitesRows = sitesResponse.data.values || [];
+      const sitesHeaders = sitesRows[0] || ["DateRangeKey", "SiteUrl", "SiteName", "SiteType", "Clicks", "Impressions", "Ctr", "Position", "UpdatedAt"];
+      const filteredSitesRows = sitesRows.slice(1).filter(row => row && row[0] !== cacheKey);
+
+      const newSitesRows = (data.allData || []).map((site: any) => [
+        cacheKey,
+        site.url || "",
+        site.name || "",
+        site.type || "Domain",
+        String(site.clicks || 0),
+        String(site.impressions || 0),
+        String(site.ctr || 0),
+        String(site.position || 0),
+        updatedAt
+      ]);
+
+      const finalSitesRows = [sitesHeaders, ...filteredSitesRows, ...newSitesRows];
+
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId,
+        range: "GSC_Sites_Db!A:I"
+      });
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: "GSC_Sites_Db!A1",
+        valueInputOption: "RAW",
+        requestBody: {
+          values: finalSitesRows
+        }
+      });
+
+      // 2. Process and save GSC_Series_Db
+      const seriesResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: "GSC_Series_Db!A:G"
+      });
+      const seriesRows = seriesResponse.data.values || [];
+      const seriesHeaders = seriesRows[0] || ["DateRangeKey", "Date", "Clicks", "Impressions", "Ctr", "Position", "UpdatedAt"];
+      const filteredSeriesRows = seriesRows.slice(1).filter(row => row && row[0] !== cacheKey);
+
+      const newSeriesRows = (data.timeSeries || []).map((entry: any) => [
+        cacheKey,
+        entry.date || "",
+        String(entry.clicks || 0),
+        String(entry.impressions || 0),
+        String(entry.ctr || 0),
+        String(entry.position || 0),
+        updatedAt
+      ]);
+
+      const finalSeriesRows = [seriesHeaders, ...filteredSeriesRows, ...newSeriesRows];
+
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId,
+        range: "GSC_Series_Db!A:G"
+      });
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: "GSC_Series_Db!A1",
+        valueInputOption: "RAW",
+        requestBody: {
+          values: finalSeriesRows
+        }
+      });
 
       res.status(200).json({ success: true });
     } catch (err: any) {
