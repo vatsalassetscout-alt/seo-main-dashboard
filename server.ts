@@ -20,21 +20,29 @@ function cleanPrivateKey(rawKey: string | undefined): string {
   // Replace escaped newlines with actual newlines
   key = key.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
   
-  // Extract strictly the BEGIN and END block if they exist
-  const startMarker = "-----BEGIN PRIVATE KEY-----";
-  const endMarker = "-----END PRIVATE KEY-----";
+  // Find start and end markers dynamically (handling RSA or generic keys)
+  const startMatch = key.match(/-----BEGIN [A-Z ]+PRIVATE KEY-----/);
+  const endMatch = key.match(/-----END [A-Z ]+PRIVATE KEY-----/);
   
-  if (key.includes(startMarker)) {
+  if (startMatch && endMatch) {
+    const startMarker = startMatch[0];
+    const endMarker = endMatch[0];
+    
     const startIdx = key.indexOf(startMarker);
-    if (startIdx !== -1) {
-      key = key.substring(startIdx);
-    }
-  }
-  
-  if (key.includes(endMarker)) {
     const endIdx = key.indexOf(endMarker);
-    if (endIdx !== -1) {
-      key = key.substring(0, endIdx + endMarker.length);
+    
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      let body = key.substring(startIdx + startMarker.length, endIdx).trim();
+      // Remove all whitespace, newlines, carriage returns, and backslashes
+      body = body.replace(/[\s\r\n\\]/g, "");
+      
+      // Chunk body into standard 64-character lines
+      const chunks = [];
+      for (let i = 0; i < body.length; i += 64) {
+        chunks.push(body.substring(i, i + 64));
+      }
+      
+      return `${startMarker}\n${chunks.join("\n")}\n${endMarker}`;
     }
   }
   
@@ -183,6 +191,51 @@ async function startServer() {
     return urls;
   }
 
+  async function scrapeDuckDuckGo(keyword: string): Promise<string[]> {
+    const urls: string[] = [];
+    try {
+      const response = await axios.get(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(keyword)}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9"
+        },
+        timeout: 8000
+      });
+      
+      const $ = cheerio.load(response.data);
+      $("a").each((_, el) => {
+        const href = $(el).attr("href") || "";
+        if (href.includes("uddg=")) {
+          const match = href.match(/[?&]uddg=([^&]+)/);
+          if (match && match[1]) {
+            try {
+              const decoded = decodeURIComponent(match[1]);
+              if (decoded.startsWith("http") && !decoded.includes("duckduckgo.com")) {
+                if (!urls.includes(decoded)) {
+                  urls.push(decoded);
+                }
+              }
+            } catch (e) {}
+          }
+        } else if (
+          href.startsWith("http") &&
+          !href.includes("duckduckgo.com") &&
+          !href.includes("google.com") &&
+          !href.includes("yahoo.com") &&
+          !href.includes("bing.com")
+        ) {
+          if (!urls.includes(href)) {
+            urls.push(href);
+          }
+        }
+      });
+    } catch (error: any) {
+      console.error("DuckDuckGo scrape failed:", error.message);
+    }
+    return urls;
+  }
+
   // 2. `/api/check-rank`
   app.post("/api/check-rank", async (req, res) => {
     res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -295,8 +348,24 @@ async function startServer() {
 
       // Step B: Organic scraping (Free / zero cost)
       console.log(`Running zero-cost organic parser for keyword: "${keyword}"...`);
-      const urls = await scrapeYahoo(keyword, country);
+      let urls: string[] = [];
       usedEngine = "Yahoo (Organic Scraper)";
+      
+      try {
+        urls = await scrapeYahoo(keyword, country);
+      } catch (e: any) {
+        console.warn(`Yahoo scan failed: ${e.message}. Falling back to DuckDuckGo...`);
+      }
+
+      if (!urls || urls.length === 0) {
+        console.log("Yahoo returned no results. Running DuckDuckGo search fallback...");
+        try {
+          urls = await scrapeDuckDuckGo(keyword);
+          usedEngine = "DuckDuckGo (Organic Scraper)";
+        } catch (e: any) {
+          console.error("DuckDuckGo fallback also failed:", e.message);
+        }
+      }
 
       console.log(`Extracted ${urls.length} URLs using ${usedEngine}`);
 
