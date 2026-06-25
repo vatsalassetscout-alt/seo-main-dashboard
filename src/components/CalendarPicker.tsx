@@ -85,6 +85,8 @@ export function CalendarPicker({
       setCalState({ from: ymd, to: ymd });
       localStorage.setItem('selectedSingleDate', ymd);
       setOpenDropdown(null);
+      // Auto-trigger load
+      setTimeout(() => onApply(), 50);
     } else {
       const newState = { ...calState, [type]: ymd };
       setCalState(newState);
