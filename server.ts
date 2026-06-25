@@ -6,6 +6,7 @@ import path from "path";
 import axios from "axios";
 import { google } from "googleapis";
 import { createServer as createViteServer } from "vite";
+import * as cheerio from "cheerio";
 
 function cleanPrivateKey(rawKey: string | undefined): string {
   if (!rawKey) return "";
@@ -91,6 +92,88 @@ async function startServer() {
     });
   });
 
+  // Helper functions for zero-cost organic scraping
+  async function scrapeYahoo(keyword: string, country?: string): Promise<string[]> {
+    const urls: string[] = [];
+    try {
+      const c = (country || "us").toLowerCase().trim();
+      let host = "search.yahoo.com";
+      if (c === "in") host = "in.search.yahoo.com";
+      else if (c === "gb" || c === "uk") host = "uk.search.yahoo.com";
+      else if (c === "ca") host = "ca.search.yahoo.com";
+      else if (c === "au") host = "au.search.yahoo.com";
+      else if (c === "de") host = "de.search.yahoo.com";
+      else if (c === "fr") host = "fr.search.yahoo.com";
+
+      // Fetch up to 3 pages of Yahoo results (positions 1-30) for high coverage
+      for (let page = 0; page < 3; page++) {
+        let url = `https://${host}/search?p=${encodeURIComponent(keyword)}`;
+        if (page > 0) {
+          const bValue = page * 10 + 1; // Page 2: 11, Page 3: 21
+          url += `&b=${bValue}`;
+        }
+        
+        try {
+          const response = await axios.get(url, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+              "Accept-Language": "en-US,en;q=0.9",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+            },
+            timeout: 10000
+          });
+          
+          const $ = cheerio.load(response.data);
+          $("a").each((_, el) => {
+            const href = $(el).attr("href") || "";
+            if (href.includes("RU=")) {
+              const idx = href.indexOf("RU=");
+              if (idx !== -1) {
+                const part = href.substring(idx + 3);
+                const nextSlash = part.indexOf("/");
+                const rawUrl = nextSlash !== -1 ? part.substring(0, nextSlash) : part;
+                try {
+                  const decoded = decodeURIComponent(rawUrl);
+                  if (
+                    decoded.startsWith("http") &&
+                    !decoded.includes("yahoo") &&
+                    !decoded.includes("bing.com/aclick") &&
+                    !decoded.includes("bing.com/click") &&
+                    !decoded.includes("google.com")
+                  ) {
+                    if (!urls.includes(decoded)) {
+                      urls.push(decoded);
+                    }
+                  }
+                } catch (e) {}
+              }
+            } else if (
+              href.startsWith("http") &&
+              !href.includes("yahoo") &&
+              !href.includes("yimg.com") &&
+              !href.includes("bing.com") &&
+              !href.includes("google.com")
+            ) {
+              if (!urls.includes(href)) {
+                urls.push(href);
+              }
+            }
+          });
+        } catch (err: any) {
+          console.error(`Yahoo page ${page + 1} scrape failed:`, err.message);
+        }
+
+        // Delay between page requests to avoid Yahoo detection blocks
+        if (page < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+    } catch (error: any) {
+      console.error("Yahoo scrape failed:", error.message);
+    }
+    return urls;
+  }
+
   // 2. `/api/check-rank`
   app.post("/api/check-rank", async (req, res) => {
     res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -100,9 +183,9 @@ async function startServer() {
 
     const { apiKey, keyword, country = "in", domain } = req.body || {};
 
-    if (!apiKey || !keyword || !domain) {
+    if (!keyword || !domain) {
       return res.status(400).json({
-        error: "Missing required fields: apiKey, keyword, domain"
+        error: "Missing required fields: keyword, domain"
       });
     }
 
@@ -112,76 +195,119 @@ async function startServer() {
       .replace(/^www\./, "")
       .split("/")[0];
 
-    // Scan up to 5 pages (Top 50 results)
-    const MAX_PAGES = 5;
-
     try {
-      const fetchPromises = [];
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const startOffset = page * 10;
-        const promise = axios
-          .get("https://serpapi.com/search.json", {
-            params: {
-              q: keyword,
-              gl: country,
-              hl: "en",
-              start: startOffset,
-              api_key: apiKey
-            },
-            timeout: 12000,
-            headers: {
-              Accept: "application/json",
-              "User-Agent": "RankPulse/1.0"
-            }
-          })
-          .then((response) => ({ page, data: response.data }))
-          .catch((err) => ({ page, error: err }));
-        fetchPromises.push(promise);
-      }
-
-      // Execute SerpApi concurrently
-      const responses = await Promise.all(fetchPromises);
-      responses.sort((a, b) => a.page - b.page);
-
       let position = -1;
       let totalResults = null;
-      let domainFound = false;
+      let usedEngine = "Google (Organic Scraper)";
 
-      for (const response of responses) {
-        if (response.error || !response.data) continue;
-
-        const data = response.data;
-        if (data.error) {
-          return res.status(400).json({ error: data.error });
+      // Step A: If SerpAPI key is provided, try that first for high-accuracy premium results
+      if (apiKey && apiKey.trim().length > 0) {
+        console.log(`SerpAPI Key provided. Attempting premium scan for: "${keyword}"...`);
+        const MAX_PAGES = 5;
+        const fetchPromises = [];
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const startOffset = page * 10;
+          const promise = axios
+            .get("https://serpapi.com/search.json", {
+              params: {
+                q: keyword,
+                gl: country,
+                hl: "en",
+                start: startOffset,
+                api_key: apiKey
+              },
+              timeout: 12000,
+              headers: {
+                Accept: "application/json",
+                "User-Agent": "RankPulse/1.0"
+              }
+            })
+            .then((response) => ({ page, data: response.data }))
+            .catch((err) => ({ page, error: err }));
+          fetchPromises.push(promise);
         }
 
-        if (response.page === 0) {
-          totalResults = data.search_information?.total_results ?? null;
-        }
+        const responses = await Promise.all(fetchPromises);
+        responses.sort((a, b) => a.page - b.page);
 
-        const organicResults = data.organic_results;
-        if (Array.isArray(organicResults) && organicResults.length > 0) {
-          for (let i = 0; i < organicResults.length; i++) {
-            const link = organicResults[i].link || "";
-            const rd = link
-              .toLowerCase()
-              .replace(/^https?:\/\//, "")
-              .replace(/^www\./, "")
-              .split("/")[0];
+        let domainFound = false;
+        for (const response of responses) {
+          if (response.error || !response.data) continue;
 
-            if (
-              rd === cleanDomain ||
-              rd === `www.${cleanDomain}` ||
-              cleanDomain === `www.${rd}` ||
-              rd.endsWith(`.${cleanDomain}`)
-            ) {
-              position = organicResults[i].position || response.page * 10 + i + 1;
-              domainFound = true;
-              break;
+          const data = response.data;
+          if (data.error) {
+            console.warn("SerpAPI error returned:", data.error);
+            continue; // Fallback to organic parser
+          }
+
+          if (response.page === 0) {
+            totalResults = data.search_information?.total_results ?? null;
+          }
+
+          const organicResults = data.organic_results;
+          if (Array.isArray(organicResults) && organicResults.length > 0) {
+            for (let i = 0; i < organicResults.length; i++) {
+              const link = organicResults[i].link || "";
+              const rd = link
+                .toLowerCase()
+                .replace(/^https?:\/\//, "")
+                .replace(/^www\./, "")
+                .split("/")[0];
+
+              if (
+                rd === cleanDomain ||
+                rd === `www.${cleanDomain}` ||
+                cleanDomain === `www.${rd}` ||
+                rd.endsWith(`.${cleanDomain}`)
+              ) {
+                position = organicResults[i].position || response.page * 10 + i + 1;
+                domainFound = true;
+                usedEngine = "SerpAPI";
+                break;
+              }
             }
           }
+          if (domainFound) break;
         }
-        if (domainFound) break;
+
+        if (domainFound) {
+          return res.status(200).json({
+            success: true,
+            position,
+            keyword,
+            domain: cleanDomain,
+            country,
+            totalResults,
+            usedEngine,
+            checkedAt: new Date().toISOString()
+          });
+        }
+      }
+
+      // Step B: Organic scraping (Free / zero cost)
+      console.log(`Running zero-cost organic parser for keyword: "${keyword}"...`);
+      const urls = await scrapeYahoo(keyword, country);
+      usedEngine = "Yahoo (Organic Scraper)";
+
+      console.log(`Extracted ${urls.length} URLs using ${usedEngine}`);
+
+      for (let i = 0; i < urls.length; i++) {
+        const link = urls[i];
+        const rd = link
+          .toLowerCase()
+          .replace(/^https?:\/\//, "")
+          .replace(/^www\./, "")
+          .split("/")[0];
+
+        if (
+          rd === cleanDomain ||
+          rd === `www.${cleanDomain}` ||
+          cleanDomain === `www.${rd}` ||
+          rd.endsWith(`.${cleanDomain}`)
+        ) {
+          position = i + 1;
+          break;
+        }
       }
 
       res.status(200).json({
@@ -190,13 +316,165 @@ async function startServer() {
         keyword,
         domain: cleanDomain,
         country,
-        totalResults,
+        totalResults: urls.length,
+        usedEngine,
         checkedAt: new Date().toISOString()
       });
     } catch (err: any) {
-      if (err.code === "ECONNABORTED") {
-        return res.status(504).json({ error: "SerpApi request timed out. Try again." });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GSC Dashboard Sheet Cache Endpoints
+  app.get("/api/get-gsc-cache", async (req, res) => {
+    try {
+      const { start, end } = req.query;
+      if (!start || !end) {
+        return res.status(400).json({ error: "Missing start or end parameters" });
       }
+
+      const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+      const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
+      const spreadsheetId = process.env.GOOGLE_GSC_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+
+      if (!clientEmail || !rawPrivateKey || !spreadsheetId) {
+        return res.status(200).json({ found: false, message: "Google Sheets credentials not configured" });
+      }
+
+      const privateKey = cleanPrivateKey(rawPrivateKey);
+      const auth = new google.auth.GoogleAuth({
+        credentials: { client_email: clientEmail, private_key: privateKey },
+        scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+      });
+
+      const sheets = google.sheets({ version: "v4", auth });
+
+      // Ensure GSC_Cache tab exists
+      try {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [{ addSheet: { properties: { title: "GSC_Cache" } } }]
+          }
+        });
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: "GSC_Cache!A1",
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [["CacheKey", "CacheData", "UpdatedAt"]]
+          }
+        });
+      } catch (e) {}
+
+      // Fetch all cached records
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: "GSC_Cache!A2:C"
+      });
+
+      const rows = response.data.values || [];
+      const cacheKey = `gsc_cache_${start}_${end}`;
+      const matchedRow = rows.find(r => r && r[0] === cacheKey);
+
+      if (matchedRow) {
+        try {
+          const parsedData = JSON.parse(matchedRow[1]);
+          return res.status(200).json({ found: true, data: parsedData });
+        } catch (jsonErr) {
+          console.error("Failed to parse cached GSC JSON:", jsonErr);
+        }
+      }
+
+      res.status(200).json({ found: false });
+    } catch (err: any) {
+      console.error("get-gsc-cache error:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/save-gsc-cache", async (req, res) => {
+    try {
+      const { start, end, data } = req.body;
+      if (!start || !end || !data) {
+        return res.status(400).json({ error: "Missing start, end, or data parameters" });
+      }
+
+      const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+      const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
+      const spreadsheetId = process.env.GOOGLE_GSC_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+
+      if (!clientEmail || !rawPrivateKey || !spreadsheetId) {
+        return res.status(400).json({
+          error: "Google credentials are not configured in environment backend variables."
+        });
+      }
+
+      const privateKey = cleanPrivateKey(rawPrivateKey);
+      const auth = new google.auth.GoogleAuth({
+        credentials: { client_email: clientEmail, private_key: privateKey },
+        scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+      });
+
+      const sheets = google.sheets({ version: "v4", auth });
+
+      // Ensure GSC_Cache tab exists
+      try {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [{ addSheet: { properties: { title: "GSC_Cache" } } }]
+          }
+        });
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: "GSC_Cache!A1",
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [["CacheKey", "CacheData", "UpdatedAt"]]
+          }
+        });
+      } catch (e) {}
+
+      // Fetch all cached records to see if we should update or insert
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: "GSC_Cache!A:C"
+      });
+
+      const rows = response.data.values || [];
+      const cacheKey = `gsc_cache_${start}_${end}`;
+      const matchedIdx = rows.findIndex(r => r && r[0] === cacheKey);
+
+      const jsonStr = JSON.stringify(data);
+      const updatedAt = new Date().toISOString();
+
+      if (matchedIdx !== -1) {
+        // Update existing row (offset by 1 for 1-based Index)
+        const rowNum = matchedIdx + 1;
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `GSC_Cache!A${rowNum}:C${rowNum}`,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [[cacheKey, jsonStr, updatedAt]]
+          }
+        });
+      } else {
+        // Append new row
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: "GSC_Cache!A2",
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [[cacheKey, jsonStr, updatedAt]]
+          }
+        });
+      }
+
+      res.status(200).json({ success: true });
+    } catch (err: any) {
+      console.error("save-gsc-cache error:", err.message);
       res.status(500).json({ error: err.message });
     }
   });
