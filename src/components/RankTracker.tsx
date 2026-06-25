@@ -259,7 +259,19 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
         })
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get("content-type") || "";
+      let data: any = {};
+
+      if (contentType.includes("html")) {
+        throw new Error(`Server returned HTML response (${response.status} ${response.statusText}). The Express server might be sleeping or bypassed.`);
+      }
+
+      try {
+        data = await response.json();
+      } catch (e) {
+        throw new Error(`Invalid server response formatting (${response.status} ${response.statusText}).`);
+      }
+
       if (!response.ok) throw new Error(data.error || 'SERP scan API error');
 
       newList[itemIdx] = {
