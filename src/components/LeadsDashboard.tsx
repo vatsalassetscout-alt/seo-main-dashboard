@@ -703,7 +703,7 @@ export function LeadsDashboard({ theme }: { theme: 'light' | 'dark' }) {
       {/* FILTER PANEL ROW / ZONE SELECTOR */}
       <div className="bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 p-4 rounded-2xl shadow-xs transition-colors space-y-2.5">
         
-        <div className="flex flex-row items-end flex-nowrap gap-2 overflow-x-auto pb-3 select-none scrollbar-thin">
+        <div className="flex flex-row flex-wrap items-end gap-3 select-none pb-1">
           
           {/* Start Date */}
           <div className="flex flex-col gap-1 min-w-[105px] md:min-w-[115px] flex-1">
@@ -795,7 +795,7 @@ export function LeadsDashboard({ theme }: { theme: 'light' | 'dark' }) {
             {showLocationDropdown && (
               <div 
                 onClick={(e) => e.stopPropagation()}
-                className="absolute top-[100%] left-0 z-40 mt-1.5 w-full min-w-[220px] bg-white dark:bg-[#1a2333] border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-2.5 space-y-2 animate-fadeIn"
+                className="absolute top-[100%] left-0 sm:right-0 sm:left-auto z-40 mt-1.5 w-full min-w-[220px] bg-white dark:bg-[#1a2333] border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-2.5 space-y-2 animate-fadeIn"
               >
                 <input
                   type="text"
@@ -846,7 +846,7 @@ export function LeadsDashboard({ theme }: { theme: 'light' | 'dark' }) {
             {showSourceDropdown && (
               <div 
                 onClick={(e) => e.stopPropagation()}
-                className="absolute top-[100%] left-0 z-40 mt-1.5 w-full min-w-[220px] bg-white dark:bg-[#1a2333] border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-2.5 space-y-2 animate-fadeIn"
+                className="absolute top-[100%] left-0 md:right-0 md:left-auto z-40 mt-1.5 w-full min-w-[220px] bg-white dark:bg-[#1a2333] border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-2.5 space-y-2 animate-fadeIn"
               >
                 <input
                   type="text"
@@ -915,23 +915,23 @@ export function LeadsDashboard({ theme }: { theme: 'light' | 'dark' }) {
           </div>
 
           {/* Reset All */}
-          <div className="flex flex-col gap-1 shrink-0">
-            <span className="text-[10px] h-[15px] block"></span>
+          <div className="flex flex-col gap-1 shrink-0 w-full sm:w-auto">
+            <span className="text-[10px] h-[15px] hidden sm:block"></span>
             <button
               onClick={resetAllFilters}
-              className="p-2 px-3.5 rounded-xl border border-slate-200 dark:border-slate-850 text-xs font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-50/20 dark:bg-slate-905/30 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-all cursor-pointer h-[38px]"
+              className="w-full sm:w-auto p-2 px-3.5 rounded-xl border border-slate-200 dark:border-slate-850 text-xs font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-50/20 dark:bg-slate-905/30 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-all cursor-pointer h-[38px]"
             >
               Reset All
             </button>
           </div>
 
           {/* Refresh Sheet */}
-          <div className="flex flex-col gap-1 shrink-0">
-            <span className="text-[10px] h-[15px] block"></span>
+          <div className="flex flex-col gap-1 shrink-0 w-full sm:w-auto">
+            <span className="text-[10px] h-[15px] hidden sm:block"></span>
             <button
               onClick={fetchSheetData}
               disabled={isLoading}
-              className="flex items-center gap-1.5 p-2 px-3.5 rounded-xl border border-slate-200 dark:border-slate-850 text-xs font-semibold bg-slate-50/20 dark:bg-slate-905/30 hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-600 dark:text-slate-300 disabled:opacity-50 cursor-pointer h-[38px] transition-colors"
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 p-2 px-3.5 rounded-xl border border-slate-200 dark:border-slate-850 text-xs font-semibold bg-slate-50/20 dark:bg-slate-905/30 hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-600 dark:text-slate-300 disabled:opacity-50 cursor-pointer h-[38px] transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
               <span>{isLoading ? 'Syncing...' : 'Sync Sheet'}</span>
@@ -939,11 +939,11 @@ export function LeadsDashboard({ theme }: { theme: 'light' | 'dark' }) {
           </div>
 
           {/* Export */}
-          <div className="flex flex-col gap-1 shrink-0">
-            <span className="text-[10px] h-[15px] block"></span>
+          <div className="flex flex-col gap-1 shrink-0 w-full sm:w-auto">
+            <span className="text-[10px] h-[15px] hidden sm:block"></span>
             <button
               onClick={() => setShowExportModal(true)}
-              className="p-2 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/15 transition-all cursor-pointer h-[38px] hover:scale-[1.01]"
+              className="w-full sm:w-auto p-2 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/15 transition-all cursor-pointer h-[38px] hover:scale-[1.01]"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export</span>
