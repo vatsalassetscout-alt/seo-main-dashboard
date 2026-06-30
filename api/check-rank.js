@@ -158,7 +158,7 @@ export default async function handler(req, res) {
     // Step A: If SerpAPI key is provided, try that first for high-accuracy premium results
     if (apiKey && apiKey.trim().length > 0) {
       console.log(`SerpAPI Key provided. Attempting premium scan for: "${keyword}"...`);
-      const MAX_PAGES = 5; 
+      const MAX_PAGES = 3; 
       const fetchPromises = [];
       for (let page = 0; page < MAX_PAGES; page++) {
         const startOffset = page * 10;
@@ -171,7 +171,7 @@ export default async function handler(req, res) {
             start: startOffset, 
             api_key: apiKey 
           },
-          timeout: 12000, 
+          timeout: 10000, 
           headers: { Accept: 'application/json', 'User-Agent': 'RankPulse/1.0' },
         }).then(response => ({ page, data: response.data })).catch(err => ({ page, error: err }));
         
@@ -243,25 +243,9 @@ export default async function handler(req, res) {
         });
       }
 
-      // If SerpAPI completely failed on all pages, let the user know why instead of falling back silently
-      const allFailed = responses.every(r => r.error || (r.data && r.data.error));
-      if (allFailed && serpApiErrorMsg) {
-        return res.status(400).json({
-          error: `SerpAPI premium scan failed: ${serpApiErrorMsg}. Please verify your SerpAPI Key and account credits.`
-        });
-      }
-
-      // SerpAPI was checked but the domain is not in the top 50 google search results
-      return res.status(200).json({
-        success: true,
-        position: -1,
-        keyword,
-        domain: cleanDomain,
-        country,
-        totalResults,
-        usedEngine: "SerpAPI",
-        checkedAt: new Date().toISOString()
-      });
+      // If SerpAPI ran but didn't find the domain or had error/credits issue, 
+      // we log it but do NOT fail! We fall through to Organic Scraping so the user still gets results.
+      console.log(`SerpAPI scan finished. domainFound=${domainFound}, error=${serpApiErrorMsg}. Proceeding to free organic scraper fallback...`);
     }
 
     // Step B: Organic scraping (Free / zero cost) fallback
