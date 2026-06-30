@@ -10,7 +10,10 @@ import {
   ExternalLink,
   TrendingUp,
   Check,
-  AlertCircle
+  AlertCircle,
+  Database,
+  Cloud,
+  Server
 } from 'lucide-react';
 
 interface Tracker {
@@ -59,6 +62,13 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
   const [activeDomain, setActiveDomain] = useState<string | null>(null);
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
 
+  // Storage Mode configuration state
+  const [storageMode, setStorageMode] = useState<'local' | 'sheets'>(() => {
+    return (localStorage.getItem('rp_storage_mode') as 'local' | 'sheets') || 'local';
+  });
+  const [sheetsTesting, setSheetsTesting] = useState(false);
+  const [sheetsVerified, setSheetsVerified] = useState<boolean | null>(null);
+
   // Form input states
   const [inpDomain, setInpDomain] = useState('');
   const [inpKeyword, setInpKeyword] = useState('');
@@ -106,38 +116,164 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
     localStorage.setItem('rp_trackers', JSON.stringify(sampleTrackers));
   };
 
+  // Test Connection to Google Sheets
+  const testSheetsConnection = async (showSuccessToast = false) => {
+    setSheetsTesting(true);
+    setSheetsError(null);
+    try {
+      const response = await fetch('/api/get-trackers');
+      if (response.ok) {
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("html")) {
+          throw new Error("Server bypassed: Vercel SPA fallbacks to HTML.");
+        }
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setSheetsVerified(true);
+          if (showSuccessToast) {
+            showToast("Google Sheets Connection Verified Successfully! ✓", "success");
+          }
+          return { success: true, data };
+        }
+      }
+      const errJson = await response.json().catch(() => ({}));
+      const errMsg = errJson.error || `HTTP ${response.status} ${response.statusText}`;
+      setSheetsError(errMsg);
+      setSheetsVerified(false);
+      return { success: false, error: errMsg };
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      setSheetsError(errMsg);
+      setSheetsVerified(false);
+      return { success: false, error: errMsg };
+    } finally {
+      setSheetsTesting(false);
+    }
+  };
+
+  // Pull tracker data from sheet
+  const pullFromSheet = async () => {
+    const res = await testSheetsConnection();
+    if (res.success && Array.isArray(res.data)) {
+      if (res.data.length === 0) {
+        showToast("Google Sheet is connected, but it contains no keyword trackers.", "info");
+      } else {
+        setTrackers(res.data);
+        localStorage.setItem('rp_trackers', JSON.stringify(res.data));
+        showToast(`Successfully pulled ${res.data.length} trackers from Google Sheets! ✓`, "success");
+      }
+    } else {
+      showToast(`Pull failed: ${res.error || "Could not connect to Google Sheets"}`, "error");
+    }
+  };
+
+  // Push tracker data to sheet
+  const pushToSheet = async () => {
+    setSheetsTesting(true);
+    try {
+      const response = await fetch('/api/save-trackers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(trackers)
+      });
+      if (response.ok) {
+        setSheetsVerified(true);
+        setSheetsError(null);
+        showToast(`Successfully pushed ${trackers.length} trackers to Google Sheets! ✓`, "success");
+      } else {
+        const errJson = await response.json().catch(() => ({}));
+        const errMsg = errJson.error || `HTTP ${response.status} ${response.statusText}`;
+        setSheetsError(errMsg);
+        showToast(`Push failed: ${errMsg}`, "error");
+      }
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      setSheetsError(errMsg);
+      showToast(`Push failed: ${errMsg}`, "error");
+    } finally {
+      setSheetsTesting(false);
+    }
+  };
+
+  // Merge local data with Google Sheets data
+  const mergeWithSheet = async () => {
+    const res = await testSheetsConnection();
+    if (res.success && Array.isArray(res.data)) {
+      const sheetTrackers = res.data;
+      
+      // Combine local trackers with sheet trackers, avoiding duplicates by keyword + domain + country
+      const merged = [...trackers];
+      sheetTrackers.forEach((st) => {
+        const exists = merged.some((mt) => 
+          mt.domain.toLowerCase().trim() === st.domain.toLowerCase().trim() &&
+          mt.keyword.toLowerCase().trim() === st.keyword.toLowerCase().trim() &&
+          mt.country.toLowerCase().trim() === st.country.toLowerCase().trim()
+        );
+        if (!exists) {
+          merged.push(st);
+        }
+      });
+
+      // Save merged trackers locally
+      setTrackers(merged);
+      localStorage.setItem('rp_trackers', JSON.stringify(merged));
+      
+      // Save merged trackers back to Google Sheets
+      const saveResponse = await fetch('/api/save-trackers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(merged)
+      });
+      if (saveResponse.ok) {
+        showToast(`Successfully merged data! ${merged.length} total trackers now tracked & synced. ✓`, "success");
+      } else {
+        showToast(`Local merge succeeded, but failed to write back to Google Sheet.`, "info");
+      }
+    } else {
+      showToast(`Merge failed: ${res.error || "Could not connect to Google Sheets"}`, "error");
+    }
+  };
+
+  // Toggle storage mode safely
+  const handleToggleStorageMode = async (mode: 'local' | 'sheets') => {
+    if (mode === 'sheets') {
+      const res = await testSheetsConnection();
+      if (!res.success) {
+        showToast(`Cannot enable Google Sheets Sync: ${res.error}`, "error");
+        return;
+      }
+    }
+    setStorageMode(mode);
+    localStorage.setItem('rp_storage_mode', mode);
+    showToast(`Storage Mode switched to: ${mode === 'local' ? 'Local Browser Storage' : 'Google Sheets Sync'} ✓`, "info");
+  };
+
   // 2. Load Trackers from local storage OR standard sheets API
   const loadTrackersData = async () => {
     setIsLoading(true);
     setSheetsError(null);
-    let successfullyLoaded = false;
-    try {
-      const response = await fetch('/api/get-trackers');
-      if (response.ok) {
-        // Detect HTML redirect page (Vercel SPA index fallback returns HTML instead of JSON)
-        const contentType = response.headers.get("content-type") || "";
-        if (contentType.includes("html")) {
-          throw new Error("API returned generic HTML page because the Express backend server is bypassed on Vercel deployment.");
-        }
+    let loadedFromSheet = false;
 
-        const remoteData = await response.json();
-        if (Array.isArray(remoteData)) {
-          setTrackers(remoteData);
-          successfullyLoaded = true;
+    if (storageMode === 'sheets') {
+      try {
+        const response = await fetch('/api/get-trackers');
+        if (response.ok) {
+          const contentType = response.headers.get("content-type") || "";
+          if (!contentType.includes("html")) {
+            const remoteData = await response.json();
+            if (Array.isArray(remoteData)) {
+              setTrackers(remoteData);
+              loadedFromSheet = true;
+              setSheetsVerified(true);
+            }
+          }
         }
-      } else {
-        const errorJson = await response.json().catch(() => ({}));
-        const errorMsg = errorJson.error || `HTTP ${response.status} ${response.statusText}`;
-        setSheetsError(errorMsg);
-        showToast(`Google Sheets Sync Error: ${errorMsg}`, 'error');
+      } catch (err: any) {
+        console.warn('Google sheets load failed on init, using local backup.', err);
       }
-    } catch (err: any) {
-      const errorMsg = err?.message || String(err);
-      setSheetsError(errorMsg);
-      console.log('Skipping remote fetch, falling back to local database:', errorMsg);
     }
 
-    if (!successfullyLoaded) {
+    if (!loadedFromSheet) {
       const localString = localStorage.getItem('rp_trackers');
       if (localString) {
         try {
@@ -165,31 +301,34 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
   useEffect(() => {
     fetchConfigStatus();
     loadTrackersData();
-  }, []);
+  }, [storageMode]);
 
   // 3. Sync and Save state to either Sheet database or LocalStorage
   const handleSave = async (updatedTrackers: Tracker[]) => {
     setTrackers(updatedTrackers);
     localStorage.setItem('rp_trackers', JSON.stringify(updatedTrackers));
 
-    try {
-      const response = await fetch('/api/save-trackers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedTrackers)
-      });
-      if (!response.ok) {
-        const errorJson = await response.json().catch(() => ({}));
-        const errorMsg = errorJson.error || `HTTP ${response.status} ${response.statusText}`;
+    if (storageMode === 'sheets') {
+      try {
+        const response = await fetch('/api/save-trackers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedTrackers)
+        });
+        if (!response.ok) {
+          const errorJson = await response.json().catch(() => ({}));
+          const errorMsg = errorJson.error || `HTTP ${response.status} ${response.statusText}`;
+          setSheetsError(errorMsg);
+          console.warn(`Google Sheet background sync failed: ${errorMsg}`);
+        } else {
+          setSheetsError(null);
+          setSheetsVerified(true);
+        }
+      } catch (err: any) {
+        const errorMsg = err?.message || String(err);
         setSheetsError(errorMsg);
-        showToast(`Google Sheets Sync Error: ${errorMsg}`, 'error');
-      } else {
-        setSheetsError(null);
+        console.warn(`Google Sheet background sync failed: ${errorMsg}`);
       }
-    } catch (err: any) {
-      const errorMsg = err?.message || String(err);
-      setSheetsError(errorMsg);
-      showToast(`Local save successful. Google Sheet sync failed: ${errorMsg}`, 'error');
     }
   };
 
@@ -475,29 +614,181 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
 
 
 
-      {/* TOP HEADER & SIMPLE API CONFIGURATION BANNER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 p-5 rounded-2xl shadow-xs transition-colors">
-        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-mono">
-          Organic Rank Scraper (Free & Active) / Optional SerpAPI Key
-        </span>
-
-        <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
-          <div className="relative w-full sm:w-[240px]">
-            <Key className="absolute left-3 top-3 w-3.5 h-3.5 text-slate-400" />
-            <input
-              type="password"
-              placeholder="Optional SerpAPI Key..."
-              value={apiKeyInput}
-              onChange={(e) => setApiKeyInput(e.target.value)}
-              className="p-2 pl-9 pr-3 w-full text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 text-slate-800 dark:text-slate-200 outline-none font-medium focus:border-indigo-500/50 h-[38px] transition-all"
-            />
+      {/* CONTROL DASHBOARD & SETTINGS SECTION */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* SERP API CREDENTIALS CARD */}
+        <div className="bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 p-5 rounded-2xl shadow-xs flex flex-col justify-between transition-all">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Key className="w-4 h-4 text-indigo-500" />
+              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">SerpAPI Live Tracking Key</h4>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+              Enter your premium <a href="https://serpapi.com" target="_blank" rel="noreferrer" className="text-indigo-500 underline font-semibold">SerpAPI</a> key to execute real Google SERP audits. If left empty, the system automatically falls back to zero-cost, high-performance organic search scrapers.
+            </p>
           </div>
-          <button
-            onClick={handleSaveApiKey}
-            className="p-2 px-5 rounded-xl font-extrabold text-xs bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer active:scale-95 transition-all h-[38px] shadow-md shadow-indigo-600/10 text-shadow-sm"
-          >
-            Save Key
-          </button>
+
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Key className="absolute left-3 top-3 w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="password"
+                placeholder="Paste your SerpAPI Key here..."
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                className="p-2 pl-9 pr-3 w-full text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 text-slate-800 dark:text-slate-200 outline-none font-medium focus:border-indigo-500/50 h-[38px] transition-all"
+              />
+            </div>
+            <button
+              onClick={handleSaveApiKey}
+              className="p-2 px-5 rounded-xl font-extrabold text-xs bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer active:scale-95 transition-all h-[38px] shadow-md shadow-indigo-600/10"
+            >
+              Save Key
+            </button>
+          </div>
+        </div>
+
+        {/* STORAGE & SYNC ENGINE CARD */}
+        <div className="bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 p-5 rounded-2xl shadow-xs flex flex-col justify-between transition-all">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-indigo-500" />
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">Storage & Sync Engine</h4>
+              </div>
+              <span className={`p-1 px-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                storageMode === 'sheets'
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-450 border border-emerald-500/20'
+                  : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20'
+              }`}>
+                {storageMode === 'sheets' ? 'Google Sheets Active' : 'Local Browser Mode'}
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+              {storageMode === 'sheets'
+                ? "Your rank data is dynamically synced with your Google Spreadsheet. Use sync actions below to manually push, pull, or merge."
+                : "Your keywords are safely stored in your browser's Local Storage. If Google Sheets environment variables are configured, you can enable Sync."
+              }
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {/* Mode selection buttons */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200/50 dark:border-slate-800/60">
+              <button
+                type="button"
+                onClick={() => handleToggleStorageMode('local')}
+                className={`py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  storageMode === 'local'
+                    ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 shadow-sm border border-slate-200/40 dark:border-slate-700/40'
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                }`}
+              >
+                Local Storage
+              </button>
+              <button
+                type="button"
+                disabled={!config?.configured}
+                onClick={() => handleToggleStorageMode('sheets')}
+                className={`py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed ${
+                  storageMode === 'sheets'
+                    ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 shadow-sm border border-slate-200/40 dark:border-slate-700/40'
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                }`}
+                title={!config?.configured ? "Google Sheets environment variables are not fully configured yet." : ""}
+              >
+                Google Sheets
+              </button>
+            </div>
+
+            {/* Sync actions panel */}
+            {storageMode === 'sheets' && (
+              <div className="grid grid-cols-3 gap-2 pt-1 animate-fadeIn">
+                <button
+                  type="button"
+                  onClick={pullFromSheet}
+                  disabled={sheetsTesting}
+                  className="py-1.5 border border-slate-200 dark:border-slate-800 bg-slate-50 hover:bg-slate-150 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 rounded-lg flex items-center justify-center gap-1 transition-all disabled:opacity-40 cursor-pointer"
+                  title="Overwrite local storage with Google Sheets data"
+                >
+                  📥 Pull Sheet
+                </button>
+                <button
+                  type="button"
+                  onClick={pushToSheet}
+                  disabled={sheetsTesting}
+                  className="py-1.5 border border-slate-200 dark:border-slate-800 bg-slate-50 hover:bg-slate-150 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 rounded-lg flex items-center justify-center gap-1 transition-all disabled:opacity-40 cursor-pointer"
+                  title="Overwrite Google Sheet with current local data"
+                >
+                  📤 Push Sheet
+                </button>
+                <button
+                  type="button"
+                  onClick={mergeWithSheet}
+                  disabled={sheetsTesting}
+                  className="py-1.5 border border-slate-200 dark:border-slate-800 bg-slate-50 hover:bg-slate-150 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 rounded-lg flex items-center justify-center gap-1 transition-all disabled:opacity-40 cursor-pointer"
+                  title="Intelligently combine both data sources"
+                >
+                  🔄 Merge Data
+                </button>
+              </div>
+            )}
+
+            {/* Status light info row */}
+            <div className="flex items-center justify-between text-[11px] text-slate-450 dark:text-slate-500 font-medium font-mono pt-1">
+              <span className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${
+                  storageMode === 'local'
+                    ? 'bg-blue-500 animate-pulse'
+                    : sheetsVerified === true
+                    ? 'bg-emerald-500'
+                    : sheetsVerified === false
+                    ? 'bg-rose-500'
+                    : 'bg-amber-500 animate-pulse'
+                }`} />
+                <span>
+                  {storageMode === 'local'
+                    ? 'Local Storage Mode'
+                    : sheetsTesting
+                    ? 'Verifying sheets connection...'
+                    : sheetsVerified === true
+                    ? 'Sheets Connected & Synced ✓'
+                    : sheetsVerified === false
+                    ? 'Sheets Connection Failed ✗'
+                    : 'Sheets connection untested'}
+                </span>
+              </span>
+              
+              {storageMode === 'sheets' && !sheetsTesting && sheetsVerified === false && sheetsError && (
+                <button
+                  type="button"
+                  onClick={() => testSheetsConnection(true)}
+                  className="text-indigo-500 hover:underline font-bold transition-all cursor-pointer"
+                  title={sheetsError}
+                >
+                  [Retry Connection]
+                </button>
+              )}
+
+              {storageMode === 'local' && config?.configured && (
+                <button
+                  type="button"
+                  onClick={() => handleToggleStorageMode('sheets')}
+                  className="text-indigo-500 hover:underline font-bold transition-all cursor-pointer"
+                >
+                  [Enable Sheets Sync]
+                </button>
+              )}
+            </div>
+            
+            {/* Troubleshooter text block */}
+            {storageMode === 'sheets' && sheetsVerified === false && sheetsError && (
+              <div className="p-2.5 rounded-lg bg-rose-550/10 dark:bg-rose-950/20 border border-rose-500/20 text-[11px] text-rose-600 dark:text-rose-400 font-semibold leading-relaxed font-sans">
+                ⚠️ {sheetsError}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
