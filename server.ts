@@ -12,15 +12,66 @@ function cleanPrivateKey(rawKey: string | undefined): string {
   if (!rawKey) return "";
   let key = rawKey.trim();
   
-  // Strip outer quotes if present (double or single quotes)
-  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+  // 1. Strip outer quotes (double, single, or backticks)
+  while (
+    (key.startsWith('"') && key.endsWith('"')) || 
+    (key.startsWith("'") && key.endsWith("'")) ||
+    (key.startsWith("`") && key.endsWith("`"))
+  ) {
     key = key.slice(1, -1).trim();
   }
   
-  // Replace escaped newlines with actual newlines
+  // 2. Handle JSON input if the user pasted the entire service account JSON
+  if (key.startsWith("{") || key.includes('"private_key"')) {
+    try {
+      const startBrace = key.indexOf("{");
+      const endBrace = key.lastIndexOf("}");
+      if (startBrace !== -1 && endBrace !== -1 && endBrace > startBrace) {
+        const jsonStr = key.substring(startBrace, endBrace + 1);
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.private_key) {
+          key = parsed.private_key.trim();
+        }
+      }
+    } catch (e) {
+      // Try parsing with unescaped characters
+      try {
+        const unescaped = key.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+        const startBrace = unescaped.indexOf("{");
+        const endBrace = unescaped.lastIndexOf("}");
+        if (startBrace !== -1 && endBrace !== -1 && endBrace > startBrace) {
+          const jsonStr = unescaped.substring(startBrace, endBrace + 1);
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.private_key) {
+            key = parsed.private_key.trim();
+          }
+        }
+      } catch (inner) {
+        // Regex fallback
+        const match = key.match(/"private_key"\s*:\s*"([^"]+)"/);
+        if (match && match[1]) {
+          key = match[1];
+        }
+      }
+    }
+  }
+
+  // Strip outer quotes again in case the extracted value was also quoted
+  while (
+    (key.startsWith('"') && key.endsWith('"')) || 
+    (key.startsWith("'") && key.endsWith("'")) ||
+    (key.startsWith("`") && key.endsWith("`"))
+  ) {
+    key = key.slice(1, -1).trim();
+  }
+  
+  // 3. Handle double-escaped or single-escaped newlines
   key = key.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
   
-  // Find start and end markers dynamically (handling RSA or generic keys)
+  // 4. Remove all backslashes. PEM private keys and base64 payloads never contain backslashes.
+  key = key.replace(/\\/g, "");
+  
+  // 5. Extract PEM block and clean its body
   const startMatch = key.match(/-----BEGIN [A-Z ]+PRIVATE KEY-----/);
   const endMatch = key.match(/-----END [A-Z ]+PRIVATE KEY-----/);
   
@@ -33,16 +84,12 @@ function cleanPrivateKey(rawKey: string | undefined): string {
     
     if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
       let body = key.substring(startIdx + startMarker.length, endIdx).trim();
-      // Remove all whitespace, newlines, carriage returns, and backslashes
-      body = body.replace(/[\s\r\n\\]/g, "");
       
-      // Chunk body into standard 64-character lines
-      const chunks = [];
-      for (let i = 0; i < body.length; i += 64) {
-        chunks.push(body.substring(i, i + 64));
-      }
+      // Keep only valid Base64 characters
+      body = body.replace(/[^A-Za-z0-9+/=]/g, "");
       
-      return `${startMarker}\n${chunks.join("\n")}\n${endMarker}`;
+      // Return a perfectly formatted single-line base64 body within PEM headers
+      return `${startMarker}\n${body}\n${endMarker}\n`;
     }
   }
   
@@ -177,7 +224,7 @@ async function startServer() {
             }
           });
         } catch (err: any) {
-          console.error(`Yahoo page ${page + 1} scrape failed:`, err.message);
+          console.log(`Yahoo page ${page + 1} scrape notice (will fallback):`, err.message);
         }
 
         // Delay between page requests to avoid Yahoo detection blocks
@@ -186,7 +233,7 @@ async function startServer() {
         }
       }
     } catch (error: any) {
-      console.error("Yahoo scrape failed:", error.message);
+      console.log("Yahoo scrape notice (will fallback):", error.message);
     }
     return urls;
   }
@@ -231,7 +278,7 @@ async function startServer() {
         }
       });
     } catch (error: any) {
-      console.error("DuckDuckGo scrape failed:", error.message);
+      console.log("DuckDuckGo scrape notice:", error.message);
     }
     return urls;
   }
