@@ -6,7 +6,7 @@ import path from "path";
 import axios from "axios";
 import { google } from "googleapis";
 import { createServer as createViteServer } from "vite";
-import * as cheerio from "cheerio";
+import { load as cheerioLoad } from "cheerio";
 
 function cleanPrivateKey(rawKey: string | undefined): string {
   if (!rawKey) return "";
@@ -223,7 +223,7 @@ async function startServer() {
             timeout: 3000
           });
           
-          const $ = cheerio.load(response.data);
+          const $ = cheerioLoad(response.data);
           $("a").each((_, el) => {
             const href = $(el).attr("href") || "";
             if (href.includes("RU=")) {
@@ -264,7 +264,7 @@ async function startServer() {
         }
 
         // Delay between page requests to avoid Yahoo detection blocks
-        if (page < 2) {
+        if (page < 0) {
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       }
@@ -286,7 +286,7 @@ async function startServer() {
         timeout: 3000
       });
       
-      const $ = cheerio.load(response.data);
+      const $ = cheerioLoad(response.data);
       $("a").each((_, el) => {
         const href = $(el).attr("href") || "";
         if (href.includes("uddg=")) {
