@@ -13,8 +13,8 @@ async function scrapeYahoo(keyword, country) {
     else if (c === 'de') host = 'de.search.yahoo.com';
     else if (c === 'fr') host = 'fr.search.yahoo.com';
 
-    // Fetch up to 3 pages of Yahoo results (positions 1-30) for high coverage
-    for (let page = 0; page < 3; page++) {
+    // Fetch up to 1 page of Yahoo results (positions 1-10) for fast free fallback without timeout risks
+    for (let page = 0; page < 1; page++) {
       let url = `https://${host}/search?p=${encodeURIComponent(keyword)}`;
       if (page > 0) {
         const bValue = page * 10 + 1; // Page 2: 11, Page 3: 21
@@ -28,7 +28,7 @@ async function scrapeYahoo(keyword, country) {
             'Accept-Language': 'en-US,en;q=0.9',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
           },
-          timeout: 10000
+          timeout: 3000
         });
         
         const $ = cheerio.load(response.data);
@@ -91,7 +91,7 @@ async function scrapeDuckDuckGo(keyword) {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9'
       },
-      timeout: 8000
+      timeout: 3000
     });
     
     const $ = cheerio.load(response.data);
