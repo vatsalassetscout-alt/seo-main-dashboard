@@ -68,10 +68,7 @@ function cleanPrivateKey(rawKey: string | undefined): string {
   // 3. Handle double-escaped or single-escaped newlines
   key = key.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
   
-  // 4. Remove all backslashes. PEM private keys and base64 payloads never contain backslashes.
-  key = key.replace(/\\/g, "");
-  
-  // 5. Extract PEM block and clean its body
+  // 4. Extract PEM block and clean its body
   const startMatch = key.match(/-----BEGIN [A-Z ]+PRIVATE KEY-----/);
   const endMatch = key.match(/-----END [A-Z ]+PRIVATE KEY-----/);
   
@@ -85,11 +82,16 @@ function cleanPrivateKey(rawKey: string | undefined): string {
     if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
       let body = key.substring(startIdx + startMarker.length, endIdx).trim();
       
-      // Keep only valid Base64 characters
+      // Keep only valid Base64 characters (remove spaces, newlines, etc.)
       body = body.replace(/[^A-Za-z0-9+/=]/g, "");
       
-      // Return a perfectly formatted single-line base64 body within PEM headers
-      return `${startMarker}\n${body}\n${endMarker}\n`;
+      // Chunk body into 64-character lines for strict PEM formatting expected by OpenSSL 3.0
+      const chunks: string[] = [];
+      for (let i = 0; i < body.length; i += 64) {
+        chunks.push(body.substring(i, i + 64));
+      }
+      
+      return `${startMarker}\n${chunks.join("\n")}\n${endMarker}\n`;
     }
   }
   
@@ -340,13 +342,21 @@ async function startServer() {
         responses.sort((a, b) => a.page - b.page);
 
         let domainFound = false;
+        let serpApiErrorMsg = "";
+
         for (const response of responses) {
-          if (response.error || !response.data) continue;
+          if (response.error) {
+            const errObj = response.error as any;
+            serpApiErrorMsg = errObj.response?.data?.error || errObj.message || "Network timeout or error connecting to SerpAPI";
+            continue;
+          }
+          if (!response.data) continue;
 
           const data = response.data;
           if (data.error) {
             console.warn("SerpAPI error returned:", data.error);
-            continue; // Fallback to organic parser
+            serpApiErrorMsg = data.error;
+            continue;
           }
 
           if (response.page === 0) {
@@ -356,7 +366,9 @@ async function startServer() {
           const organicResults = data.organic_results;
           if (Array.isArray(organicResults) && organicResults.length > 0) {
             for (let i = 0; i < organicResults.length; i++) {
-              const link = organicResults[i].link || "";
+              const item = organicResults[i];
+              if (!item) continue;
+              const link = item.link || "";
               const rd = link
                 .toLowerCase()
                 .replace(/^https?:\/\//, "")
@@ -369,7 +381,7 @@ async function startServer() {
                 cleanDomain === `www.${rd}` ||
                 rd.endsWith(`.${cleanDomain}`)
               ) {
-                position = organicResults[i].position || response.page * 10 + i + 1;
+                position = item.position || response.page * 10 + i + 1;
                 domainFound = true;
                 usedEngine = "SerpAPI";
                 break;
@@ -391,6 +403,26 @@ async function startServer() {
             checkedAt: new Date().toISOString()
           });
         }
+
+        // If SerpAPI completely failed on all pages, let the user know why instead of falling back silently
+        const allFailed = responses.every(r => r.error || (r.data && r.data.error));
+        if (allFailed && serpApiErrorMsg) {
+          return res.status(400).json({
+            error: `SerpAPI premium scan failed: ${serpApiErrorMsg}. Please verify your SerpAPI Key and account credits.`
+          });
+        }
+
+        // SerpAPI was checked but the domain is not in the top 50 google search results
+        return res.status(200).json({
+          success: true,
+          position: -1,
+          keyword,
+          domain: cleanDomain,
+          country,
+          totalResults,
+          usedEngine: "SerpAPI (Google)",
+          checkedAt: new Date().toISOString()
+        });
       }
 
       // Step B: Organic scraping (Free / zero cost)
