@@ -364,93 +364,97 @@ async function startServer() {
 
       // Step A: If SerpAPI key is provided, try that first for high-accuracy premium results
       if (apiKey && apiKey.trim().length > 0) {
-        console.log(`SerpAPI Key provided. Attempting premium scan for: "${keyword}"...`);
-        const MAX_PAGES = 3;
-        let domainFound = false;
-        let serpApiErrorMsg = "";
-
-        for (let page = 0; page < MAX_PAGES; page++) {
-          const startOffset = page * 10;
-          console.log(`SerpAPI Page ${page + 1} (start=${startOffset}) for "${keyword}"...`);
-          try {
-            const response = await axios.get("https://serpapi.com/search.json", {
-              params: {
-                engine: "google",
-                q: keyword,
-                gl: country,
-                hl: "en",
-                start: startOffset,
-                api_key: apiKey
+        console.log(`SerpAPI Key provided. Attempting premium concurrent scan for: "${keyword}"...`);
+        const MAX_PAGES = 5; 
+        try {
+          const fetchPromises = [];
+          for (let page = 0; page < MAX_PAGES; page++) {
+            const startOffset = page * 10;
+            const promise = axios.get('https://serpapi.com/search.json', {
+              params: { 
+                q: keyword, 
+                gl: country, 
+                hl: 'en', 
+                start: startOffset, 
+                api_key: apiKey 
               },
-              timeout: 10000,
-              headers: {
-                Accept: "application/json",
-                "User-Agent": "RankPulse/1.0"
-              }
-            });
+              timeout: 12000, 
+              headers: { Accept: 'application/json', 'User-Agent': 'RankPulse/1.0' },
+            }).then(res => ({ page, data: res.data })).catch(err => ({ page, error: err }));
+            
+            fetchPromises.push(promise);
+          }
 
+          const responses = await Promise.all(fetchPromises);
+          responses.sort((a, b) => a.page - b.page);
+
+          let domainFound = false;
+          let serpApiErrorMsg = "";
+
+          for (const response of responses) {
+            if (response.error) {
+              serpApiErrorMsg = response.error.message || "Request failed";
+              continue;
+            }
+            if (!response.data) continue;
+            
             const data = response.data;
-            if (!data) continue;
-
             if (data.error) {
-              console.warn(`SerpAPI returned error for "${keyword}":`, data.error);
               serpApiErrorMsg = data.error;
               break;
             }
 
-            if (page === 0) {
+            if (response.page === 0) {
               totalResults = data.search_information?.total_results ?? null;
             }
 
             const organicResults = data.organic_results;
             if (Array.isArray(organicResults) && organicResults.length > 0) {
               for (let i = 0; i < organicResults.length; i++) {
-                const item = organicResults[i];
-                if (!item || !item.link) continue;
-                
-                if (isDomainMatch(item.link, cleanDomain)) {
-                  position = item.position || (page * 10 + i + 1);
+                const link = organicResults[i].link || '';
+                const rd = link.toLowerCase()
+                  .replace(/^https?:\/\//, '')
+                  .replace(/^www\./, '')
+                  .split('/')[0];
+                  
+                if (
+                  rd === cleanDomain ||
+                  rd === `www.${cleanDomain}` ||
+                  cleanDomain === `www.${rd}` ||
+                  rd.endsWith(`.${cleanDomain}`)
+                ) {
+                  position = organicResults[i].position || (response.page * 10 + i + 1);
                   domainFound = true;
-                  usedEngine = "SerpAPI";
                   break;
                 }
               }
             }
-
-            if (domainFound) break;
-            
-            // Short delay between pages if not found to be nice to API
-            if (page < MAX_PAGES - 1) {
-              await new Promise((resolve) => setTimeout(resolve, 300));
-            }
-          } catch (err: any) {
-            console.error(`SerpAPI fetch error on page ${page + 1}:`, err.message);
-            serpApiErrorMsg = err.response?.data?.error || err.message || "Network error or timeout";
-            const status = err.response?.status;
-            if (status === 401 || status === 402 || status === 403 || status === 429) {
-              break;
-            }
+            if (domainFound) break; 
           }
-        }
 
-        // If SerpAPI failed (e.g. invalid key/credits), let the user know directly
-        if (serpApiErrorMsg && !domainFound) {
-          return res.status(400).json({
-            error: `SerpAPI premium scan failed: ${serpApiErrorMsg}. Please check your SerpAPI credentials & limits.`
+          if (serpApiErrorMsg && !domainFound) {
+            return res.status(400).json({
+              error: `SerpAPI premium scan failed: ${serpApiErrorMsg}. Please check your SerpAPI credentials & limits.`
+            });
+          }
+
+          return res.status(200).json({
+            success: true,
+            position,
+            keyword,
+            domain: cleanDomain,
+            country,
+            totalResults,
+            usedEngine: "SerpAPI (Google)",
+            checkedAt: new Date().toISOString()
           });
-        }
 
-        // Return the precise SerpAPI results directly without falling back to slow free scrapers
-        return res.status(200).json({
-          success: true,
-          position,
-          keyword,
-          domain: cleanDomain,
-          country,
-          totalResults,
-          usedEngine: "SerpAPI (Google)",
-          checkedAt: new Date().toISOString()
-        });
+        } catch (err: any) {
+          if (err.code === 'ECONNABORTED') {
+            return res.status(504).json({ error: 'Request timed out. Try again.' });
+          }
+          return res.status(500).json({ error: err.message });
+        }
       }
 
       // Step B: Organic scraping (Free / zero cost) - ONLY RUNS IF NO SerpAPI key is provided!
