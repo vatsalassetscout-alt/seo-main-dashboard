@@ -214,8 +214,20 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
     });
 
     return Array.from(map.entries()).map(([domain, kws]) => {
-      const positions = kws.map((k) => k.pos).filter((p): p is number => p !== null && p > 0);
-      const best = positions.length ? Math.min(...positions) : null;
+      const positiveRanks = kws.map((k) => k.pos).filter((p): p is number => p !== null && p > 0);
+      
+      let best: number | null = null;
+      if (positiveRanks.length > 0) {
+        best = Math.min(...positiveRanks);
+      } else {
+        const hasPendingOrChecking = kws.some((k) => k.pos === null || k.pos === 0);
+        if (hasPendingOrChecking) {
+          best = null;
+        } else {
+          best = -1;
+        }
+      }
+
       const anyRefreshes = kws.some((k) => k.pos === 0);
       const lastChecked = kws
         .map((k) => k.checked)
