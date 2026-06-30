@@ -1,5 +1,5 @@
 import axios from 'axios';
-import * as cheerio from 'cheerio';
+import { load as cheerioLoad } from 'cheerio';
 
 async function scrapeYahoo(keyword, country) {
   const urls = [];
@@ -31,7 +31,7 @@ async function scrapeYahoo(keyword, country) {
           timeout: 3000
         });
         
-        const $ = cheerio.load(response.data);
+        const $ = cheerioLoad(response.data);
         $('a').each((_, el) => {
           const href = $(el).attr('href') || '';
           if (href.includes('RU=')) {
@@ -72,7 +72,7 @@ async function scrapeYahoo(keyword, country) {
       }
 
       // Delay between page requests to avoid Yahoo detection blocks
-      if (page < 2) {
+      if (page < 0) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
@@ -94,7 +94,7 @@ async function scrapeDuckDuckGo(keyword) {
       timeout: 3000
     });
     
-    const $ = cheerio.load(response.data);
+    const $ = cheerioLoad(response.data);
     $('a').each((_, el) => {
       const href = $(el).attr('href') || '';
       if (href.includes('uddg=')) {
@@ -144,7 +144,8 @@ export default async function handler(req, res) {
     });
   }
 
-  const cleanDomain = domain
+  const cleanKeyword = String(keyword).trim();
+  const cleanDomain = String(domain)
     .toLowerCase()
     .replace(/^https?:\/\//, '')
     .replace(/^www\./, '')
