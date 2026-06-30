@@ -63,10 +63,7 @@ function cleanPrivateKey(rawKey) {
   // 3. Handle double-escaped or single-escaped newlines
   key = key.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
   
-  // 4. Remove all backslashes. PEM private keys and base64 payloads never contain backslashes.
-  key = key.replace(/\\/g, '');
-  
-  // 5. Extract PEM block and clean its body
+  // 4. Extract PEM block and clean its body
   const startMatch = key.match(/-----BEGIN [A-Z ]+PRIVATE KEY-----/);
   const endMatch = key.match(/-----END [A-Z ]+PRIVATE KEY-----/);
   
@@ -83,8 +80,13 @@ function cleanPrivateKey(rawKey) {
       // Keep only valid Base64 characters
       body = body.replace(/[^A-Za-z0-9+/=]/g, '');
       
-      // Return a perfectly formatted single-line base64 body within PEM headers
-      return `${startMarker}\n${body}\n${endMarker}\n`;
+      // Chunk body into 64-character lines for strict PEM formatting expected by OpenSSL 3.0
+      const chunks = [];
+      for (let i = 0; i < body.length; i += 64) {
+        chunks.push(body.substring(i, i + 64));
+      }
+      
+      return `${startMarker}\n${chunks.join('\n')}\n${endMarker}\n`;
     }
   }
   
@@ -153,6 +155,33 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('save-trackers error:', err.message);
-    return res.status(500).json({ error: err.message, stack: err.stack });
+    let enhanced = err.message || String(err);
+    const lower = enhanced.toLowerCase();
+    if (
+      lower.includes("permission") || 
+      lower.includes("access") || 
+      lower.includes("unauthorized") || 
+      lower.includes("caller does not have permission")
+    ) {
+      enhanced = `Google Sheets Permission Error: The service account does not have access. Share your Google Sheet (ID: ${spreadsheetId || 'configured ID'}) with the email: "${clientEmail || 'your service account email'}" as an 'Editor'.`;
+    } else if (
+      lower.includes("not found") || 
+      lower.includes("requested entity was not found")
+    ) {
+      enhanced = `Google Sheets Not Found Error: The spreadsheet ID "${spreadsheetId || ''}" could not be found. Please double-check your GOOGLE_SHEET_ID backend environment variable.`;
+    } else if (
+      lower.includes("unsupported") ||
+      lower.includes("decoder") ||
+      lower.includes("key")
+    ) {
+      enhanced = `Google API Key Format Error: The format of your GOOGLE_PRIVATE_KEY is invalid or OpenSSL cannot decode it. Verify that you copied the ENTIRE private key block (including BEGIN/END headers) and that it is placed in your environment settings correctly.`;
+    } else if (
+      lower.includes("invalid_grant") ||
+      lower.includes("signature") ||
+      lower.includes("jwt")
+    ) {
+      enhanced = `Google API Authentication Error (Invalid JWT Signature): The private key does not match the Google service account email: "${clientEmail || ''}". Verify that both GOOGLE_CLIENT_EMAIL and GOOGLE_PRIVATE_KEY belong to the exact same service account.`;
+    }
+    return res.status(500).json({ error: enhanced });
   }
 }
