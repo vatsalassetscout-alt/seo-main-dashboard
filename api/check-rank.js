@@ -155,100 +155,115 @@ export default async function handler(req, res) {
     let totalResults = null;
     let usedEngine = 'Google (Organic Scraper)';
 
+    const isDomainMatch = (link, target) => {
+      if (!link || !target) return false;
+      const cleanLink = link.toLowerCase()
+        .replace(/^https?:\/\//, '')
+        .replace(/^www\./, '')
+        .split('/')[0]
+        .trim();
+      const cleanTarget = target.toLowerCase()
+        .replace(/^https?:\/\//, '')
+        .replace(/^www\./, '')
+        .split('/')[0]
+        .trim();
+      return cleanLink === cleanTarget || 
+             cleanLink.endsWith('.' + cleanTarget) || 
+             cleanTarget.endsWith('.' + cleanLink);
+    };
+
     // Step A: If SerpAPI key is provided, try that first for high-accuracy premium results
     if (apiKey && apiKey.trim().length > 0) {
       console.log(`SerpAPI Key provided. Attempting premium scan for: "${keyword}"...`);
-      const MAX_PAGES = 3; 
-      const fetchPromises = [];
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const startOffset = page * 10;
-        
-        const promise = axios.get('https://serpapi.com/search.json', {
-          params: { 
-            q: keyword, 
-            gl: country, 
-            hl: 'en', 
-            start: startOffset, 
-            api_key: apiKey 
-          },
-          timeout: 10000, 
-          headers: { Accept: 'application/json', 'User-Agent': 'RankPulse/1.0' },
-        }).then(response => ({ page, data: response.data })).catch(err => ({ page, error: err }));
-        
-        fetchPromises.push(promise);
-      }
-
-      const responses = await Promise.all(fetchPromises);
-      responses.sort((a, b) => a.page - b.page);
-
+      const MAX_PAGES = 3;
       let domainFound = false;
       let serpApiErrorMsg = "";
 
-      for (const response of responses) {
-        if (response.error) {
-          const errObj = response.error;
-          serpApiErrorMsg = errObj.response?.data?.error || errObj.message || "Network timeout or error connecting to SerpAPI";
-          continue;
-        }
-        if (!response.data) continue;
-        
-        const data = response.data;
-        if (data.error) {
-          console.warn('SerpAPI error returned:', data.error);
-          serpApiErrorMsg = data.error;
-          continue;
-        }
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const startOffset = page * 10;
+        console.log(`SerpAPI Page ${page + 1} (start=${startOffset}) for "${keyword}"...`);
+        try {
+          const response = await axios.get('https://serpapi.com/search.json', {
+            params: {
+              engine: 'google',
+              q: keyword,
+              gl: country,
+              hl: 'en',
+              start: startOffset,
+              api_key: apiKey
+            },
+            timeout: 10000,
+            headers: {
+              Accept: 'application/json',
+              'User-Agent': 'RankPulse/1.0'
+            }
+          });
 
-        if (response.page === 0) {
-          totalResults = data.search_information?.total_results ?? null;
-        }
+          const data = response.data;
+          if (!data) continue;
 
-        const organicResults = data.organic_results;
-        if (Array.isArray(organicResults) && organicResults.length > 0) {
-          for (let i = 0; i < organicResults.length; i++) {
-            const item = organicResults[i];
-            if (!item) continue;
-            const link = item.link || '';
-            const rd = link.toLowerCase()
-              .replace(/^https?:\/\//, '')
-              .replace(/^www\./, '')
-              .split('/')[0];
+          if (data.error) {
+            console.warn(`SerpAPI returned error for "${keyword}":`, data.error);
+            serpApiErrorMsg = data.error;
+            break;
+          }
+
+          if (page === 0) {
+            totalResults = data.search_information?.total_results ?? null;
+          }
+
+          const organicResults = data.organic_results;
+          if (Array.isArray(organicResults) && organicResults.length > 0) {
+            for (let i = 0; i < organicResults.length; i++) {
+              const item = organicResults[i];
+              if (!item || !item.link) continue;
               
-            if (
-              rd === cleanDomain ||
-              rd === `www.${cleanDomain}` ||
-              cleanDomain === `www.${rd}` ||
-              rd.endsWith(`.${cleanDomain}`)
-            ) {
-              position = item.position || (response.page * 10 + i + 1);
-              domainFound = true;
-              usedEngine = 'SerpAPI';
-              break;
+              if (isDomainMatch(item.link, cleanDomain)) {
+                position = item.position || (page * 10 + i + 1);
+                domainFound = true;
+                usedEngine = 'SerpAPI';
+                break;
+              }
             }
           }
+
+          if (domainFound) break;
+          
+          // Short delay between pages if not found to be nice to API
+          if (page < MAX_PAGES - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 300));
+          }
+        } catch (err) {
+          console.error(`SerpAPI fetch error on page ${page + 1}:`, err.message);
+          serpApiErrorMsg = err.response?.data?.error || err.message || "Network error or timeout";
+          const status = err.response?.status;
+          if (status === 401 || status === 402 || status === 403 || status === 429) {
+            break;
+          }
         }
-        if (domainFound) break; 
       }
 
-      if (domainFound) {
-        return res.status(200).json({
-          success: true,
-          position,
-          keyword,
-          domain: cleanDomain,
-          country,
-          totalResults,
-          usedEngine,
-          checkedAt: new Date().toISOString(),
+      // If SerpAPI failed (e.g. invalid key/credits), let the user know directly
+      if (serpApiErrorMsg && !domainFound) {
+        return res.status(400).json({
+          error: `SerpAPI premium scan failed: ${serpApiErrorMsg}. Please check your SerpAPI credentials & limits.`
         });
       }
 
-      // If SerpAPI ran but didn't find the domain or had error/credits issue, 
-      // we log it but do NOT fail! We fall through to Organic Scraping so the user still gets results.
-      console.log(`SerpAPI scan finished. domainFound=${domainFound}, error=${serpApiErrorMsg}. Proceeding to free organic scraper fallback...`);
+      // Return the precise SerpAPI results directly without falling back to slow free scrapers
+      return res.status(200).json({
+        success: true,
+        position,
+        keyword,
+        domain: cleanDomain,
+        country,
+        totalResults,
+        usedEngine: 'SerpAPI (Google)',
+        checkedAt: new Date().toISOString()
+      });
     }
 
-    // Step B: Organic scraping (Free / zero cost) fallback
+    // Step B: Organic scraping (Free / zero cost) fallback - ONLY RUNS IF NO SerpAPI key is provided!
     console.log(`Running zero-cost organic parser for keyword: "${keyword}"...`);
     let urls = [];
     usedEngine = 'Yahoo (Organic Scraper)';
@@ -256,7 +271,7 @@ export default async function handler(req, res) {
     try {
       urls = await scrapeYahoo(keyword, country);
     } catch (e) {
-      console.warn(`Yahoo scan failed: ${e.message}. Falling back to DuckDuckGo...`);
+      console.warn(`Yahoo scan failed: ${e?.message || e}. Falling back to DuckDuckGo...`);
     }
 
     if (!urls || urls.length === 0) {
@@ -265,7 +280,7 @@ export default async function handler(req, res) {
         urls = await scrapeDuckDuckGo(keyword);
         usedEngine = 'DuckDuckGo (Organic Scraper)';
       } catch (e) {
-        console.error('DuckDuckGo fallback also failed:', e.message);
+        console.error('DuckDuckGo fallback also failed:', e?.message || e);
       }
     }
 
@@ -273,17 +288,7 @@ export default async function handler(req, res) {
 
     for (let i = 0; i < urls.length; i++) {
       const link = urls[i];
-      const rd = link.toLowerCase()
-        .replace(/^https?:\/\//, '')
-        .replace(/^www\./, '')
-        .split('/')[0];
-
-      if (
-        rd === cleanDomain ||
-        rd === `www.${cleanDomain}` ||
-        cleanDomain === `www.${rd}` ||
-        rd.endsWith(`.${cleanDomain}`)
-      ) {
+      if (isDomainMatch(link, cleanDomain)) {
         position = i + 1;
         break;
       }
@@ -304,6 +309,6 @@ export default async function handler(req, res) {
     if (err.code === 'ECONNABORTED') {
       return res.status(504).json({ error: 'Request timed out. Try again.' });
     }
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err?.message || String(err) });
   }
 }
