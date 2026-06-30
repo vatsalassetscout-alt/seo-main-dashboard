@@ -278,10 +278,17 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
         throw new Error(`Server returned HTML response (${response.status} ${response.statusText}). The Express server might be sleeping or bypassed.`);
       }
 
+      let responseText = "";
       try {
-        data = await response.json();
+        responseText = await response.text();
       } catch (e) {
-        throw new Error(`Invalid server response formatting (${response.status} ${response.statusText}).`);
+        throw new Error(`Failed to read server response body (${response.status} ${response.statusText}).`);
+      }
+
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Invalid server response format (${response.status} ${response.statusText}): ${responseText.substring(0, 100)}`);
       }
 
       if (!response.ok) throw new Error(data.error || 'SERP scan API error');
