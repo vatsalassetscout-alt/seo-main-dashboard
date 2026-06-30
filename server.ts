@@ -115,6 +115,20 @@ function enhanceGoogleError(err: any, clientEmail?: string, spreadsheetId?: stri
   ) {
     return `Google Sheets Not Found Error: The spreadsheet ID "${spreadsheetId || ''}" could not be found. Please double-check your GOOGLE_SHEET_ID backend environment variable.`;
   }
+  if (
+    lower.includes("unsupported") ||
+    lower.includes("decoder") ||
+    lower.includes("key")
+  ) {
+    return `Google API Key Format Error: The format of your GOOGLE_PRIVATE_KEY is invalid or OpenSSL cannot decode it. Please verify that you copied the ENTIRE private key block (including BEGIN/END headers) and that it is placed in your environment settings correctly.`;
+  }
+  if (
+    lower.includes("invalid_grant") ||
+    lower.includes("signature") ||
+    lower.includes("jwt")
+  ) {
+    return `Google API Authentication Error (Invalid JWT Signature): The private key does not match the Google service account email: "${clientEmail || ''}". Please verify that both GOOGLE_CLIENT_EMAIL and GOOGLE_PRIVATE_KEY belong to the exact same service account.`;
+  }
   return errMsg;
 }
 
@@ -191,8 +205,8 @@ async function startServer() {
       else if (c === "de") host = "de.search.yahoo.com";
       else if (c === "fr") host = "fr.search.yahoo.com";
 
-      // Fetch up to 3 pages of Yahoo results (positions 1-30) for high coverage
-      for (let page = 0; page < 3; page++) {
+      // Fetch up to 1 page of Yahoo results (positions 1-10) for fast free fallback without timeout risks
+      for (let page = 0; page < 1; page++) {
         let url = `https://${host}/search?p=${encodeURIComponent(keyword)}`;
         if (page > 0) {
           const bValue = page * 10 + 1; // Page 2: 11, Page 3: 21
@@ -206,7 +220,7 @@ async function startServer() {
               "Accept-Language": "en-US,en;q=0.9",
               "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
             },
-            timeout: 10000
+            timeout: 3000
           });
           
           const $ = cheerio.load(response.data);
@@ -269,7 +283,7 @@ async function startServer() {
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
           "Accept-Language": "en-US,en;q=0.9"
         },
-        timeout: 8000
+        timeout: 3000
       });
       
       const $ = cheerio.load(response.data);
