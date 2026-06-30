@@ -98,6 +98,26 @@ function cleanPrivateKey(rawKey: string | undefined): string {
   return key;
 }
 
+function enhanceGoogleError(err: any, clientEmail?: string, spreadsheetId?: string): string {
+  const errMsg = err?.message || String(err);
+  const lower = errMsg.toLowerCase();
+  if (
+    lower.includes("permission") || 
+    lower.includes("access") || 
+    lower.includes("unauthorized") || 
+    lower.includes("caller does not have permission")
+  ) {
+    return `Google Sheets Permission Error: The backend service account does not have access. Please make sure you have shared your Google Sheet (ID: ${spreadsheetId || 'configured ID'}) with the email: "${clientEmail || 'your Google service account email'}" and granted it 'Editor' role permissions.`;
+  }
+  if (
+    lower.includes("not found") || 
+    lower.includes("requested entity was not found")
+  ) {
+    return `Google Sheets Not Found Error: The spreadsheet ID "${spreadsheetId || ''}" could not be found. Please double-check your GOOGLE_SHEET_ID backend environment variable.`;
+  }
+  return errMsg;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -688,8 +708,11 @@ async function startServer() {
 
       res.status(200).json({ success: true });
     } catch (err: any) {
-      console.error("save-gsc-cache error:", err.message);
-      res.status(500).json({ error: err.message });
+      const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+      const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+      const enhancedMessage = enhanceGoogleError(err, clientEmail, spreadsheetId);
+      console.error("save-gsc-cache error:", enhancedMessage);
+      res.status(500).json({ error: enhancedMessage });
     }
   });
 
@@ -739,8 +762,11 @@ async function startServer() {
 
       res.status(200).json(trackers);
     } catch (err: any) {
-      console.error("get-trackers error:", err.message);
-      res.status(500).json({ error: err.message });
+      const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+      const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+      const enhancedMessage = enhanceGoogleError(err, clientEmail, spreadsheetId);
+      console.error("get-trackers error:", enhancedMessage);
+      res.status(500).json({ error: enhancedMessage });
     }
   });
 
@@ -802,8 +828,11 @@ async function startServer() {
 
       res.status(200).json({ success: true, saved: trackers.length });
     } catch (err: any) {
-      console.error("save-trackers error:", err.message);
-      res.status(500).json({ error: err.message });
+      const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+      const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+      const enhancedMessage = enhanceGoogleError(err, clientEmail, spreadsheetId);
+      console.error("save-trackers error:", enhancedMessage);
+      res.status(500).json({ error: enhancedMessage });
     }
   });
 
