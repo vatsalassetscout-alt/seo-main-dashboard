@@ -182,13 +182,21 @@ export default async function handler(req, res) {
       responses.sort((a, b) => a.page - b.page);
 
       let domainFound = false;
+      let serpApiErrorMsg = "";
+
       for (const response of responses) {
-        if (response.error || !response.data) continue;
+        if (response.error) {
+          const errObj = response.error;
+          serpApiErrorMsg = errObj.response?.data?.error || errObj.message || "Network timeout or error connecting to SerpAPI";
+          continue;
+        }
+        if (!response.data) continue;
         
         const data = response.data;
         if (data.error) {
           console.warn('SerpAPI error returned:', data.error);
-          continue; // Fallback to organic parser
+          serpApiErrorMsg = data.error;
+          continue;
         }
 
         if (response.page === 0) {
@@ -198,7 +206,9 @@ export default async function handler(req, res) {
         const organicResults = data.organic_results;
         if (Array.isArray(organicResults) && organicResults.length > 0) {
           for (let i = 0; i < organicResults.length; i++) {
-            const link = organicResults[i].link || '';
+            const item = organicResults[i];
+            if (!item) continue;
+            const link = item.link || '';
             const rd = link.toLowerCase()
               .replace(/^https?:\/\//, '')
               .replace(/^www\./, '')
@@ -210,7 +220,7 @@ export default async function handler(req, res) {
               cleanDomain === `www.${rd}` ||
               rd.endsWith(`.${cleanDomain}`)
             ) {
-              position = organicResults[i].position || (response.page * 10 + i + 1);
+              position = item.position || (response.page * 10 + i + 1);
               domainFound = true;
               usedEngine = 'SerpAPI';
               break;
@@ -232,6 +242,26 @@ export default async function handler(req, res) {
           checkedAt: new Date().toISOString(),
         });
       }
+
+      // If SerpAPI completely failed on all pages, let the user know why instead of falling back silently
+      const allFailed = responses.every(r => r.error || (r.data && r.data.error));
+      if (allFailed && serpApiErrorMsg) {
+        return res.status(400).json({
+          error: `SerpAPI premium scan failed: ${serpApiErrorMsg}. Please verify your SerpAPI Key and account credits.`
+        });
+      }
+
+      // SerpAPI was checked but the domain is not in the top 50 google search results
+      return res.status(200).json({
+        success: true,
+        position: -1,
+        keyword,
+        domain: cleanDomain,
+        country,
+        totalResults,
+        usedEngine: "SerpAPI",
+        checkedAt: new Date().toISOString()
+      });
     }
 
     // Step B: Organic scraping (Free / zero cost) fallback
