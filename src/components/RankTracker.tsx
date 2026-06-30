@@ -200,6 +200,10 @@ export function RankTracker({ theme }: { theme: 'light' | 'dark' }) {
       showToast('Please type or paste a valid non-empty SerpAPI Key.', 'error');
       return;
     }
+    if (keyToSave.includes('••••')) {
+      showToast('Your existing SerpAPI key is already safely saved & active! ✓', 'info');
+      return;
+    }
     setApiKey(keyToSave);
     localStorage.setItem('rp_apikey', keyToSave);
     showToast('SerpAPI key saved successfully. Ready for ranks live scan! ✓');
