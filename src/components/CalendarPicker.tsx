@@ -18,6 +18,10 @@ export function CalendarPicker({
 }: CalendarPickerProps) {
   const [openDropdown, setOpenDropdown] = useState<'from' | 'to' | null>(null);
   
+  // Local temporary states for custom range selection to avoid mid-selection auto-queries
+  const [localFrom, setLocalFrom] = useState<string | null>(calState.from);
+  const [localTo, setLocalTo] = useState<string | null>(calState.to);
+
   // View month states for calendar views
   const [fromViewMonth, setFromViewMonth] = useState<Date>(new Date());
   const [toViewMonth, setToViewMonth] = useState<Date>(new Date());
@@ -25,9 +29,15 @@ export function CalendarPicker({
   const fromRef = useRef<HTMLDivElement>(null);
   const toRef = useRef<HTMLDivElement>(null);
 
+  // Keep local custom dates in sync when the parent calState updates
+  useEffect(() => {
+    setLocalFrom(calState.from);
+    setLocalTo(calState.to);
+  }, [calState.from, calState.to]);
+
   // Close calendar popups when clicking outside
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
       if (
         openDropdown === 'from' && 
         fromRef.current && 
@@ -44,7 +54,11 @@ export function CalendarPicker({
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, [openDropdown]);
 
   // Sync calendar opening with state defaults
@@ -87,6 +101,14 @@ export function CalendarPicker({
       setOpenDropdown(null);
       // Auto-trigger load
       setTimeout(() => onApply(), 50);
+    } else if (preset === 'custom') {
+      // Custom range: update local temporary states instantly (no auto-triggering on click)
+      if (type === 'from') {
+        setLocalFrom(ymd);
+      } else {
+        setLocalTo(ymd);
+      }
+      setOpenDropdown(null);
     } else {
       const newState = { ...calState, [type]: ymd };
       setCalState(newState);
@@ -96,8 +118,18 @@ export function CalendarPicker({
 
   const handleClear = () => {
     setCalState({ from: null, to: null });
+    setLocalFrom(null);
+    setLocalTo(null);
     localStorage.removeItem('selectedSingleDate');
     setOpenDropdown(null);
+  };
+
+  const handleApplyClick = () => {
+    setCalState({ from: localFrom, to: localTo });
+    // Hold query requests until Apply button is clicked
+    setTimeout(() => {
+      onApply();
+    }, 50);
   };
 
   const todayStr = toYMD(new Date());
@@ -128,15 +160,19 @@ export function CalendarPicker({
       const isFuture = ymd > todayStr;
       const isToday = ymd === todayStr;
       
-      // Determine selection highlighting based on preset
+      // Determine selection highlighting based on custom/preset states
       let isSelected = false;
       if (isSingleMode) {
         isSelected = ymd === calState.from;
+      } else if (preset === 'custom') {
+        isSelected = ymd === (type === 'from' ? localFrom : localTo);
       } else {
         isSelected = ymd === calState[type];
       }
 
-      const isSubRangeHighlight = !isSingleMode && calState.from && calState.to && ymd >= calState.from && ymd <= calState.to;
+      const activeFrom = preset === 'custom' ? localFrom : calState.from;
+      const activeTo = preset === 'custom' ? localTo : calState.to;
+      const isSubRangeHighlight = !isSingleMode && activeFrom && activeTo && ymd >= activeFrom && ymd <= activeTo;
 
       let cls = "cal-day text-center p-1 px-2 text-xs rounded-sm transition-all duration-100 font-mono select-none cursor-pointer ";
       if (isFuture) {
@@ -204,7 +240,7 @@ export function CalendarPicker({
         {/* Footer info and clear */}
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
-            {isSingleMode ? (calState.from || 'Select date') : (calState.from && calState.to ? `${calState.from} to ${calState.to}` : 'Pick range')}
+            {isSingleMode ? (calState.from || 'Select date') : (localFrom && localTo ? `${localFrom} to ${localTo}` : 'Pick range')}
           </span>
           <button
             type="button"
@@ -258,7 +294,7 @@ export function CalendarPicker({
               onClick={() => setOpenDropdown(openDropdown === 'from' ? null : 'from')}
             >
               <span>📅</span>
-              <span className="truncate">{calState.from || 'Select date'}</span>
+              <span className="truncate">{(preset === 'custom' ? localFrom : calState.from) || 'Select date'}</span>
             </div>
             {openDropdown === 'from' && (
               <div className="absolute top-full left-0 z-50">
@@ -285,7 +321,7 @@ export function CalendarPicker({
                 onClick={() => setOpenDropdown(openDropdown === 'to' ? null : 'to')}
               >
                 <span>📅</span>
-                <span className="truncate">{calState.to || 'Select date'}</span>
+                <span className="truncate">{localTo || 'Select date'}</span>
               </div>
               {openDropdown === 'to' && (
                 <div className="absolute top-full left-0 z-50">
@@ -301,7 +337,7 @@ export function CalendarPicker({
               <button
                 type="button"
                 className="p-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-semibold rounded-lg text-xs transition-all flex items-center justify-center cursor-pointer h-[38px] shadow-sm"
-                onClick={onApply}
+                onClick={handleApplyClick}
               >
                 Apply
               </button>
