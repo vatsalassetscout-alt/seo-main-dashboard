@@ -635,7 +635,7 @@ export function LeadsDashboard({ theme }: { theme: 'light' | 'dark' }) {
 
   // Close dropdowns when clicking outside
   useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
       if (
         (projectRef.current && projectRef.current.contains(target)) ||
@@ -649,7 +649,11 @@ export function LeadsDashboard({ theme }: { theme: 'light' | 'dark' }) {
       setShowProjectDropdown(false);
     };
     document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
   }, []);
 
   // Modal grouping details
